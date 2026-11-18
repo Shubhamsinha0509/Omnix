@@ -48,7 +48,7 @@ quota on Gemini's free tier).
 
 **Done when:** "summarise my unread email" works in chat, and sending requires approval.
 
-- [ ] `connections` table + token encryption (`lib/crypto.ts`)
+- [x] `connections` table + token encryption (`lib/crypto.ts`) — plus `lib/integrations/connections.ts`, the only way tokens are read or written
 - [ ] Connect / disconnect Gmail (separate OAuth from sign-in), token refresh
 - [ ] Tools: `gmail.search`, `gmail.read`, `gmail.create_draft`, `gmail.send`
 - [ ] Approvals: table, inline approval card in chat, execute stored payload

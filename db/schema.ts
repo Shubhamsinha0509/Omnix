@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, jsonb, pgTable, serial, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -50,6 +50,54 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+/**
+ * A user's authorised accounts — the Gmail inbox an agent may read, and from Phase 5 the
+ * MCP servers it may call. One row per connected account, owned by one user (D14).
+ *
+ * The tokens are encrypted with `lib/crypto.ts` (D13) and bound to this row's owner and
+ * provider, so the columns are useless on their own. Nothing here is ever sent to the
+ * browser or put in a prompt.
+ */
+export const connections = pgTable(
+  "connections",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // "gmail" for built-in integrations, or an allow-listed server id like "mcp:notion".
+    provider: text("provider").notNull(),
+    kind: text("kind", { enum: ["builtin", "mcp"] })
+      .notNull()
+      .default("builtin"),
+    // For `mcp` connections: the remote server's URL, from our allow-list.
+    serverUrl: text("server_url"),
+    // What to show the user: the email address or workspace name.
+    accountLabel: text("account_label").notNull(),
+    accessTokenEnc: text("access_token_enc").notNull(),
+    // Absent when the provider doesn't issue one, so the connection simply expires.
+    refreshTokenEnc: text("refresh_token_enc"),
+    // What the user actually approved, which is not always what we asked for.
+    scopes: text("scopes").array().notNull().default([]),
+    expiresAt: timestamp("expires_at"),
+    status: text("status", { enum: ["active", "expired", "revoked"] })
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    // Reconnecting the same account updates that row instead of adding a duplicate,
+    // while a second, different account of the same provider is still allowed.
+    uniqueIndex("connections_user_provider_account_idx").on(
+      table.userId,
+      table.provider,
+      table.accountLabel,
+    ),
+    index("connections_user_idx").on(table.userId),
+  ],
+);
 
 /**
  * One row per agent run: a chat turn today, a task run from Phase 4.
@@ -106,6 +154,8 @@ export type Agent = typeof agents.$inferSelect;
 export type NewAgent = typeof agents.$inferInsert;
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
+export type Connection = typeof connections.$inferSelect;
+export type NewConnection = typeof connections.$inferInsert;
 export type Run = typeof runs.$inferSelect;
 export type NewRun = typeof runs.$inferInsert;
 export type RunStep = typeof runSteps.$inferSelect;

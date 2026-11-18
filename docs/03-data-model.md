@@ -12,6 +12,7 @@ All tables live in Neon Postgres and are defined in `db/schema.ts` (Drizzle).
 | `messages` | Chat messages | `id`, `conversation_id` → conversations, `role` (`user` / `assistant`), `content`, `created_at` |
 | `runs` | One row per agent run — a chat turn today, a task run from Phase 4 | `id`, `agent_id` → agents, `user_id` → users, `conversation_id` (nullable), `task_id` (nullable, no foreign key until `tasks` exists), `trigger`, `status`, `error`, `input_tokens`, `output_tokens`, `started_at`, `finished_at` |
 | `run_steps` | The timeline inside a run: each model turn, tool call and tool result | `id`, `run_id` → runs, `seq`, `type` (`model` / `tool_call` / `tool_result` / `approval` / `error`), `tool`, `payload` (jsonb, redacted), `created_at` |
+| `connections` | A user's authorised accounts (Gmail now, MCP servers from Phase 5) | `id`, `user_id` → users, `provider`, `kind` (`builtin` / `mcp`), `server_url`, `account_label`, `access_token_enc`, `refresh_token_enc`, `scopes` (text[]), `expires_at`, `status` (`active` / `expired` / `revoked`), `created_at`, `updated_at` |
 
 Deleting a user cascades to their agents, conversations, messages and runs; deleting a run
 cascades to its steps.
@@ -19,6 +20,13 @@ cascades to its steps.
 `run_steps.payload` is written through `redact()` in `lib/agent/runs.ts`: keys that look
 like secrets become `[redacted]` and long strings are trimmed. `vm_seconds` joins `runs`
 in Phase 6, when there is a VM to measure.
+
+**Connections are only reached through `lib/integrations/connections.ts`.** Every lookup
+there takes a `user_id`, and decrypted tokens leave through exactly one function,
+`getCredentials()` — everything a page or route can call returns a `SafeConnection` with
+no token material in it. A unique index on (`user_id`, `provider`, `account_label`) makes
+reconnecting the same account update that row, while still allowing a second, different
+account of the same provider.
 
 ## Planned tables
 
@@ -32,20 +40,6 @@ Status: **Proposed**. Columns are a starting point and will change as we build.
 | `runtime` | `shared` \| `vm` | Whether tools run on our server or the agent's own VM |
 | `status` | `active` \| `paused` | Pause an agent without deleting it |
 | `updated_at` | timestamp | Edits |
-
-### Connections — a user's authorised accounts
-
-| Column | Notes |
-|---|---|
-| `id` | uuid |
-| `user_id` | → users |
-| `provider` | `gmail` (built-in) or the id of an allow-listed MCP server, e.g. `mcp:notion` |
-| `kind` | `builtin` \| `mcp` |
-| `server_url` | for `mcp` connections: the remote MCP server's URL (from our allow-list) |
-| `account_label` | e.g. the email address or workspace name, for display |
-| `access_token_enc`, `refresh_token_enc` | **Encrypted** (see [security](07-security.md#secrets)) — for both Gmail and MCP server OAuth |
-| `scopes` | what the user approved |
-| `expires_at`, `status` (`active` / `expired` / `revoked`) | token health |
 
 ### MCP server catalog
 

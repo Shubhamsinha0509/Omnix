@@ -119,6 +119,9 @@ lib/
     schema.ts                      validates the model's arguments
     time.ts, web.ts                the Phase 2 tools
   inngest/                         Inngest client + functions
+  crypto.ts                        token encryption (AES-256-GCM)
+  integrations/
+    connections.ts                 the only way tokens are read or written
   -- planned --
   integrations/gmail/              Gmail OAuth + API client
   mcp/                             MCP client, server allow-list, per-user OAuth
@@ -126,7 +129,7 @@ lib/
   crypto.ts                        token encryption
 db/
   schema.ts                        Drizzle schema (users, agents, conversations,
-                                   messages, runs, run_steps)
+                                   messages, runs, run_steps, connections)
 components/custom/workspace/       app components (sidebar, chat, agent form, Markdown)
 docs/                              this plan
 ```

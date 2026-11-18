@@ -41,7 +41,15 @@ metadata endpoints such as `169.254.169.254` that hand out credentials. So `web.
 
 ## Secrets
 
-- OAuth tokens are **encrypted at rest** (AES-256-GCM with a key from an environment variable, later a managed KMS). Only server code decrypts them, only at the moment a tool runs.
+- OAuth tokens are **encrypted at rest** — **built**, `lib/crypto.ts` (D13). AES-256-GCM
+  with a 32-byte key from `TOKEN_ENCRYPTION_KEY`, later a managed KMS. Because GCM is
+  authenticated, a row that has been tampered with fails to decrypt rather than returning
+  wrong bytes. Each ciphertext is additionally bound to its owner and provider as AAD, so
+  a token blob copied into another user's row will not open. Ciphertexts carry a `v1:`
+  prefix so the algorithm can be changed later without guessing at old rows.
+- A missing or wrong-length key is a hard failure at the point of use, never a silent
+  fallback to something weaker. The app still starts without it, so nothing is blocked
+  until a token actually needs storing.
 - Tokens are never sent to the browser, never put in prompts, never placed in a sandbox VM, and our code never logs them. One caveat: a URL the model chose can itself carry a secret (`?access_token=…`), and tool arguments and results are logged. So the audit log also cleans URLs — credentials in `user:pass@` and secret-looking query parameters are replaced with `[redacted]`, and tool arguments are parsed before logging so nested credential keys are caught (`lib/agent/runs.ts`, `lib/agent/runner.ts`). That is a safety net based on names, not a guarantee.
 - `.env` holds our own secrets (`NEXTAUTH_SECRET`, `DATABASE_URL`, `OPENROUTER_API_KEY`, OAuth client secrets, the token-encryption key). It must never be committed. In production, secrets live in the hosting provider's secret store.
 
@@ -78,7 +86,7 @@ Other providers (Slack App Directory, Atlassian, Notion) have their own review p
 
 - [x] `/api/inngest/trigger` removed or authenticated
 - [ ] Inngest signing key configured
-- [ ] Token encryption in place
+- [x] Token encryption in place
 - [ ] Approvals on for all write/destructive tools by default
 - [ ] Per-user rate and usage limits
 - [ ] Privacy policy and terms

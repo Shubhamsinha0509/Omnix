@@ -2,7 +2,7 @@
 
 Decide these before the phase listed. When decided, record the answer in [decisions](09-decisions.md) and remove it from here.
 
-Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16), GitHub + Google sign-in (D18). MCP-first integrations is proposed (D17).
+Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16), GitHub + Google sign-in (D18), approvals off-switch limited to `write` tools (D29). MCP-first integrations is proposed (D17).
 
 ## Product
 
@@ -34,5 +34,4 @@ Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16)
 | Question | Why it matters | Decide before |
 |---|---|---|
 | How long do we keep run logs that contain email/Slack content? | Privacy, storage cost | Phase 4 |
-| Can users turn off approvals per tool, and for which risk levels? | Convenience vs safety | Phase 3 |
 | Budget and timeline for Google's restricted-scope verification (CASA)? | Blocks public Gmail access | Before launch |
