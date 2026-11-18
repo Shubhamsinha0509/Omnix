@@ -1,12 +1,17 @@
 import { sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
+// Every timestamp is `withTimezone: true` (Postgres `timestamptz`). A plain `timestamp`
+// has no zone, and the driver reads it back in the server's local zone — on a machine in
+// India that shifted every time 5.5 hours into the past. `timestamptz` is an exact
+// instant, read back correctly wherever the code runs.
+
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   name: text("name"),
   email: text("email").notNull().unique(),
   image: text("image"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const agents = pgTable("agents", {
@@ -21,7 +26,7 @@ export const agents = pgTable("agents", {
   avatarSeed: text("avatar_seed")
     .notNull()
     .default(sql`substr(md5(random()::text), 1, 8)`),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const conversations = pgTable("conversations", {
@@ -36,9 +41,9 @@ export const conversations = pgTable("conversations", {
   // Lease held while the agent is answering in this conversation, so two overlapping
   // messages (e.g. from two tabs) can't both generate from incomplete history. Released
   // when the turn ends; the expiry only matters if a server dies mid-reply.
-  busyUntil: timestamp("busy_until"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  busyUntil: timestamp("busy_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const messages = pgTable("messages", {
@@ -48,7 +53,7 @@ export const messages = pgTable("messages", {
     .references(() => conversations.id, { onDelete: "cascade" }),
   role: text("role", { enum: ["user", "assistant"] }).notNull(),
   content: text("content").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 /**
@@ -80,12 +85,12 @@ export const connections = pgTable(
     refreshTokenEnc: text("refresh_token_enc"),
     // What the user actually approved, which is not always what we asked for.
     scopes: text("scopes").array().notNull().default([]),
-    expiresAt: timestamp("expires_at"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
     status: text("status", { enum: ["active", "expired", "revoked"] })
       .notNull()
       .default("active"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     // Reconnecting the same account updates that row instead of adding a duplicate,
@@ -125,8 +130,8 @@ export const runs = pgTable("runs", {
   error: text("error"),
   inputTokens: integer("input_tokens").notNull().default(0),
   outputTokens: integer("output_tokens").notNull().default(0),
-  startedAt: timestamp("started_at").defaultNow().notNull(),
-  finishedAt: timestamp("finished_at"),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
 });
 
 /**
@@ -145,7 +150,7 @@ export const runSteps = pgTable("run_steps", {
   // Tool key for tool steps, e.g. "web.fetch"; null for model steps.
   tool: text("tool"),
   payload: jsonb("payload").notNull().default({}),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export type User = typeof users.$inferSelect;
