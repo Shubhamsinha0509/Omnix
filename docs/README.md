@@ -48,7 +48,10 @@ The app needs one key to work: `OPENROUTER_API_KEY`. Without it every chat retur
 ### Choosing the model
 
 `CHAT_MODEL` in `lib/ai.ts` is the one place the model is set, as an OpenRouter model id.
-It is `deepseek/deepseek-chat-v3.1` today ($0.25 / $0.95 per 1M tokens in/out).
+It is `nvidia/nemotron-3-ultra-550b-a55b:free` today — free, for testing (D32). Free models are rate
+limited and their providers may log prompts, so switch back to a paid model such as
+`deepseek/deepseek-chat-v3.1` ($0.25 / $0.95 per 1M tokens in/out) before agents read real
+email.
 
 One key reaches every model, so switching is a one-line change — that is the main reason
 we are on OpenRouter (decision D26). Browse ids and prices at

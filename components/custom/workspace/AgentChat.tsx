@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
@@ -276,6 +277,8 @@ export default function AgentChat({
               }
             />
             <DropdownMenuContent align="end" className="w-72 min-w-72">
+              {/* Base UI requires a menu label to sit inside a group. */}
+              <DropdownMenuGroup>
               <DropdownMenuLabel>Past chats</DropdownMenuLabel>
               {conversations.map((chatItem) => (
                 <DropdownMenuItem
@@ -293,6 +296,7 @@ export default function AgentChat({
                   )}
                 </DropdownMenuItem>
               ))}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -306,6 +310,8 @@ export default function AgentChat({
           variant="ghost"
           size="icon"
           aria-label="Agent settings"
+          // Rendered as a link, not a <button>: tell Base UI so it doesn't add button semantics.
+          nativeButton={false}
           render={<Link href={`/workspace/agent/${agent.id}/settings`} />}
         >
           <Settings />

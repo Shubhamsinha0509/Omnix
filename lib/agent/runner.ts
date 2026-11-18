@@ -164,18 +164,22 @@ export async function runAgent(options: RunAgentOptions): Promise<RunOutcome> {
     } catch (error) {
       const kind = refusalKind(error);
       if (!chosen.some(isNativeTool) || !kind) throw error;
-      if (kind === "capability") nativeToolsBlocked = true;
       nativeToolsOffForRun = true;
+      // The refusal may not be about search at all — a rate-limited model looks the same.
+      // Only once the turn works without search do we know search was the problem; if the
+      // retry fails too, its error is the real one and goes to the user instead.
+      const turn = await streamTurn({ messages, modelTools: buildModelTools(executableOnly), signal, onText });
+      if (kind === "capability") nativeToolsBlocked = true;
       await log("error", "web.search", {
         reason: kind === "capability" ? "server_tool_unavailable" : "server_tool_rate_limited",
         status: (error as APIError).status,
       });
       note(
         kind === "capability"
-          ? "Web search isn't available for this model or account, so I'll answer without it."
-          : "Web search is rate limited right now, so I'll answer without it this time.",
+          ? "Web search isn't available for this model or account, so I answered without it."
+          : "Web search was rate limited, so I answered without it this time.",
       );
-      return await streamTurn({ messages, modelTools: buildModelTools(executableOnly), signal, onText });
+      return turn;
     }
   }
 

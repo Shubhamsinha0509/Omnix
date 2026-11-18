@@ -25,7 +25,7 @@ Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16)
 | Question | Why it matters | Decide before |
 |---|---|---|
 | Can VM agents access the internet freely, or only allow-listed sites? | Security vs usefulness | Phase 6 |
-| Which OpenRouter model should be the default, and do we let users pick? | `deepseek/deepseek-chat-v3.1` is the current default (D26). 415 models support tool calling, and the data model already plans a per-agent `model` column — cheap to offer, but someone has to own the choice and the cost | Phase 3 |
+| Which OpenRouter model should be the default, and do we let users pick? | `nvidia/nemotron-3-ultra-550b-a55b:free` is the current default, for testing only (D32); `deepseek/deepseek-chat-v3.1` was the paid default (D26). 415 models support tool calling, and the data model already plans a per-agent `model` column — cheap to offer, but someone has to own the choice and the cost | Phase 3 |
 | What is the monthly OpenRouter budget, and what happens at the limit? | Tokens and per-search `web.search` charges both draw on account credit; a 402 currently just surfaces as an error message | Phase 4 (before agents run unattended) |
 | Vercel plan (Hobby vs Pro)? | Function duration limits and commercial-use terms | Before deploying |
 

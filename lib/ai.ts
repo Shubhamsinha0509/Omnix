@@ -7,7 +7,9 @@ import type { Agent } from "@/db";
  * agent at once; a per-agent override comes with the `model` column in a later phase.
  * Browse ids and prices at https://openrouter.ai/models.
  */
-export const CHAT_MODEL = "deepseek/deepseek-chat-v3.1";
+// Free model for testing (D32). Rate limited, and free providers may log prompts, so
+// switch to a paid model (e.g. "deepseek/deepseek-chat-v3.1") before connecting Gmail.
+export const CHAT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
 
 /** OpenRouter speaks the OpenAI API, so the official SDK is the client (decision D26). */
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
