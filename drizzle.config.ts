@@ -1,4 +1,8 @@
 import { defineConfig } from 'drizzle-kit';
+import { loadEnvConfig } from '@next/env';
+
+// drizzle-kit doesn't read .env by itself — load it the same way Next.js does.
+loadEnvConfig(process.cwd());
 
 export default defineConfig({
   schema: './db/schema.ts',

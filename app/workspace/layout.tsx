@@ -1,0 +1,15 @@
+import React from "react";
+
+import AppSidebar from "@/components/custom/wrokspace/AppSidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+
+const WorkspaceLayout = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>{children}</SidebarInset>
+    </SidebarProvider>
+  );
+};
+
+export default WorkspaceLayout;
