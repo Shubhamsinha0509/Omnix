@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import { conversations, db, messages } from "@/db";
 import { RUN_STREAM_CONTENT_TYPE, encodeEvent, type RunEvent } from "@/lib/agent/events";
@@ -8,7 +8,21 @@ import { hasModelKey } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
 
 const MAX_MESSAGE = 8000;
-const HISTORY_LIMIT = 40; // most recent messages sent to Gemini as context
+const HISTORY_LIMIT = 40; // most recent messages sent to the model as context
+
+/**
+ * How long a conversation stays claimed if a turn never releases it (a crashed server).
+ * Longer than any real turn; a normal turn always releases it in `finally`.
+ */
+const LEASE = sql`now() + interval '10 minutes'`;
+
+/** Releases a conversation's lease and marks it as just updated. */
+async function releaseConversation(conversationId: string) {
+  await db
+    .update(conversations)
+    .set({ busyUntil: null, updatedAt: new Date() })
+    .where(eq(conversations.id, conversationId));
+}
 
 const jsonError = (error: string, status: number) => Response.json({ error }, { status });
 
@@ -42,42 +56,54 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const agent = await getOwnedAgent(user.id, agentId);
   if (!agent) return jsonError("Agent not found.", 404);
 
-  // Continue the given conversation, or start a new one.
+  // Continue the given conversation, or start a new one — either way claiming it, so only
+  // one turn at a time runs in it. Claiming is a single conditional UPDATE, so two
+  // requests can't both win.
   let conversationId: string;
   if (requestedConversation) {
     if (!UUID_PATTERN.test(requestedConversation)) return jsonError("Conversation not found.", 404);
-    const [existing] = await db
-      .select({ id: conversations.id })
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.id, requestedConversation),
-          eq(conversations.agentId, agent.id),
-          eq(conversations.userId, user.id),
-        ),
-      )
-      .limit(1);
-    if (!existing) return jsonError("Conversation not found.", 404);
-    conversationId = existing.id;
+    const owned = and(
+      eq(conversations.id, requestedConversation),
+      eq(conversations.agentId, agent.id),
+      eq(conversations.userId, user.id),
+    );
+    const [claimed] = await db
+      .update(conversations)
+      .set({ busyUntil: LEASE })
+      .where(and(owned, or(isNull(conversations.busyUntil), lt(conversations.busyUntil, sql`now()`))))
+      .returning({ id: conversations.id });
+    if (!claimed) {
+      const [exists] = await db.select({ id: conversations.id }).from(conversations).where(owned).limit(1);
+      if (!exists) return jsonError("Conversation not found.", 404);
+      return jsonError("This chat is still answering your previous message. Wait for it to finish, then send again.", 409);
+    }
+    conversationId = claimed.id;
   } else {
     const [created] = await db
       .insert(conversations)
-      .values({ agentId: agent.id, userId: user.id, title: text.slice(0, 60) })
+      .values({ agentId: agent.id, userId: user.id, title: text.slice(0, 60), busyUntil: LEASE })
       .returning({ id: conversations.id });
     conversationId = created.id;
   }
 
-  await db.insert(messages).values({ conversationId, role: "user", content: text });
+  // From here on the lease is ours: every path out must release it.
+  let history: HistoryMessage[];
+  try {
+    await db.insert(messages).values({ conversationId, role: "user", content: text });
 
-  // Recent history, oldest first. The conversation should start with a user message.
-  const recent = await db
-    .select({ role: messages.role, content: messages.content })
-    .from(messages)
-    .where(eq(messages.conversationId, conversationId))
-    .orderBy(desc(messages.createdAt))
-    .limit(HISTORY_LIMIT);
-  const history: HistoryMessage[] = recent.reverse();
-  while (history.length > 0 && history[0].role !== "user") history.shift();
+    // Recent history, oldest first. The conversation should start with a user message.
+    const recent = await db
+      .select({ role: messages.role, content: messages.content })
+      .from(messages)
+      .where(eq(messages.conversationId, conversationId))
+      .orderBy(desc(messages.createdAt))
+      .limit(HISTORY_LIMIT);
+    history = recent.reverse();
+    while (history.length > 0 && history[0].role !== "user") history.shift();
+  } catch (error) {
+    await releaseConversation(conversationId).catch(() => {});
+    throw error;
+  }
 
   const abort = new AbortController();
   const encoder = new TextEncoder();
@@ -111,13 +137,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           if (reply) {
             await db.insert(messages).values({ conversationId, role: "assistant", content: reply });
           }
-          await db
-            .update(conversations)
-            .set({ updatedAt: new Date() })
-            .where(eq(conversations.id, conversationId));
         } catch (error) {
           console.error("Failed to save agent reply:", error);
         }
+        // Success, failure or cancellation: the next message may now run.
+        await releaseConversation(conversationId).catch((error) =>
+          console.error("Failed to release conversation:", error),
+        );
         if (!closed) controller.close();
       }
     },

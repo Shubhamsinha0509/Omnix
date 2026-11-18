@@ -60,8 +60,11 @@ const components: Components = {
   h3: ({ children }) => <h3 className="mt-4 mb-2 text-sm font-semibold first:mt-0">{children}</h3>,
   h4: ({ children }) => <h4 className="mt-4 mb-2 text-sm font-semibold first:mt-0">{children}</h4>,
   ul: ({ children }) => <ul className="my-3 ms-5 list-disc space-y-1 first:mt-0 last:mb-0">{children}</ul>,
-  ol: ({ children }) => (
-    <ol className="my-3 ms-5 list-decimal space-y-1 first:mt-0 last:mb-0">{children}</ol>
+  // Keep `start` so a list that begins at 3 (common when a reply resumes a list) isn't renumbered.
+  ol: ({ children, start }) => (
+    <ol start={start} className="my-3 ms-5 list-decimal space-y-1 first:mt-0 last:mb-0">
+      {children}
+    </ol>
   ),
   li: ({ children }) => <li className="[&>p]:my-0">{children}</li>,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,

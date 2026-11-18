@@ -8,7 +8,7 @@ All tables live in Neon Postgres and are defined in `db/schema.ts` (Drizzle).
 |---|---|---|
 | `users` | One row per signed-in person (written on every sign-in) | `id` (serial), `email` (unique), `name`, `image`, `created_at` |
 | `agents` | A user's agents | `id` (uuid), `user_id` → users, `name`, `instructions`, `avatar_seed`, `created_at` |
-| `conversations` | Chat threads with an agent | `id`, `agent_id` → agents, `user_id` → users, `title`, `created_at`, `updated_at` |
+| `conversations` | Chat threads with an agent | `id`, `agent_id` → agents, `user_id` → users, `title`, `busy_until` (lease held while a turn runs — D30), `created_at`, `updated_at` |
 | `messages` | Chat messages | `id`, `conversation_id` → conversations, `role` (`user` / `assistant`), `content`, `created_at` |
 | `runs` | One row per agent run — a chat turn today, a task run from Phase 4 | `id`, `agent_id` → agents, `user_id` → users, `conversation_id` (nullable), `task_id` (nullable, no foreign key until `tasks` exists), `trigger`, `status`, `error`, `input_tokens`, `output_tokens`, `started_at`, `finished_at` |
 | `run_steps` | The timeline inside a run: each model turn, tool call and tool result | `id`, `run_id` → runs, `seq`, `type` (`model` / `tool_call` / `tool_result` / `approval` / `error`), `tool`, `payload` (jsonb, redacted), `created_at` |

@@ -31,8 +31,17 @@ Guard rails on every run:
 | Max output size fed back to the model | 20,000 characters, trimmed with a note | Avoid filling the context with a 5 MB email |
 | Per-user daily token / VM budget | from plan (**Phase 7**) | Cost control |
 
-The first four live in `LIMITS` in `lib/agent/runner.ts`. Hitting one is not an error: the
-model is told, the user gets a note, and the run finishes with whatever it has.
+The first four live in `LIMITS` in `lib/agent/runner.ts`. Hitting one is not an error, and
+the run finishes with whatever it has:
+
+- **Tool calls:** calls past the limit get an error result the model can read, the limit
+  is logged, and the user gets a note. Searches OpenRouter runs server-side count toward
+  the same budget, and `web.search` stops being offered once it is spent.
+- **Iterations:** if the fifteenth turn asks for tools, those tools run, then the runner
+  logs the limit and shows the user a note **without calling the model again** — so the
+  model never sees those last results.
+- **Timeouts and output size:** the tool's result says what happened (stopped, or
+  trimmed) and the model carries on.
 
 Tool calling is the OpenAI format, which OpenRouter speaks for every model (D26): tools
 go out as `{ type: "function", function: { name, description, parameters } }`, and the
@@ -109,7 +118,9 @@ If the provider refuses a server tool, the run doesn't die with it: see D25.
 | **Schedule** | One Inngest cron function checks for due tasks every minute and fans out `agent/task.run` events (per-task cron in the user's timezone stored in `tasks`) | 4 |
 | **Event** | Webhooks / push notifications (Gmail push via Pub/Sub, Slack Events API) → Inngest event → matching tasks | 5 |
 
-Background runs use Inngest so each model call and tool call is a separate `step.run()` — if step 5 fails, Inngest retries step 5, not the whole run, and completed tool calls (like a sent email) are never repeated.
+Background runs use Inngest so each model call and tool call is a separate `step.run()` — if step 5 fails, Inngest retries step 5, not the whole run, and steps whose completion Inngest has already recorded are not run again.
+
+That is not a guarantee that an external action happens only once. If a worker dies after a tool has acted (an email went out) but before Inngest records the step as complete, the retry runs the step again and repeats the action. So every tool with an external effect must be **idempotent or reconcilable**: pass an idempotency key derived from the run and step where the provider supports one, or check for the earlier result before acting again (e.g. look for the sent message before re-sending).
 
 ## Approvals
 

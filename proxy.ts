@@ -15,7 +15,8 @@ export default withAuth(
     pages: {
       signIn: "/sign-in",
     },
-    secret: process.env.NEXTAUTH_SECRET || "default-development-secret-change-in-env",
+    // Same secret as lib/auth.ts, and the same rule: no public fallback.
+    secret: process.env.NEXTAUTH_SECRET,
   }
 );
 

@@ -6,11 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { MAX_AGENT_INSTRUCTIONS, MAX_AGENT_NAME } from "@/lib/agent-limits";
 import { AgentAvatar, randomAvatarSeed } from "./AgentAvatar";
-
-/** Limits used by the form and checked again in the server action. */
-export const MAX_AGENT_NAME = 60;
-export const MAX_AGENT_INSTRUCTIONS = 1000;
 
 export type AgentDraft = {
   name: string;

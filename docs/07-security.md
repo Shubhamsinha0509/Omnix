@@ -17,7 +17,7 @@ An agent that can both read untrusted content **and** send or delete things can 
 | **Least privilege** | Each agent only gets the tools and connections it needs; read-only by default |
 | **Treat tool output as data** | **Built.** A tool marked `untrustedOutput` (today `web.fetch`) has its result wrapped with a note saying it is untrusted data, and the system prompt tells the agent never to follow instructions found inside a tool result and to tell the user when content tried |
 | **Limit blast radius** | Rate limits per tool (e.g. max emails sent per hour), recipient allow-lists as an option |
-| **Audit log** | **Built.** Every model turn and tool call goes to `run_steps`, with secret-looking keys redacted, so anything unexpected can be traced |
+| **Audit log** | **Built, best effort.** Model turns and tool calls are written to `run_steps`, with secret-looking keys and URL credentials redacted. A failed insert is logged and the run carries on (`stepLogger`), so the trail can miss steps and is not a guaranteed-complete record |
 | **MCP allow-list** | Only vetted MCP servers; a malicious server can hide instructions in its tool descriptions ("tool poisoning"). MCP tools need approval unless we've reviewed them as read-only ([integrations](05-integrations.md#mcp-rules)) |
 
 ## Fetching URLs the model chose
@@ -28,7 +28,13 @@ metadata endpoints such as `169.254.169.254` that hand out credentials. So `web.
 
 - allows `http`/`https` only, and no credentials in the URL;
 - **resolves the hostname and checks the IP**, refusing loopback, private, link-local,
-  carrier-grade NAT and reserved ranges (a name can always point at a private address);
+  carrier-grade NAT and reserved ranges (a name can always point at a private address),
+  including IPv4 written as IPv6 in either spelling (`::ffff:127.0.0.1` and the
+  `::ffff:7f00:1` form the URL parser turns it into);
+- **connects only to the address it checked**: the check runs inside the connection's own
+  DNS lookup (an `undici` Agent with a custom `lookup`), so a DNS answer that changes
+  between check and connect — DNS rebinding — can't reach a private address. Host header
+  and TLS name are unchanged;
 - follows redirects by hand, re-checking every hop (at most 3);
 - caps the download at 600 KB and the whole request at 15 s;
 - returns text only — HTML is stripped of scripts, styles and tags before the model sees it.
@@ -36,7 +42,7 @@ metadata endpoints such as `169.254.169.254` that hand out credentials. So `web.
 ## Secrets
 
 - OAuth tokens are **encrypted at rest** (AES-256-GCM with a key from an environment variable, later a managed KMS). Only server code decrypts them, only at the moment a tool runs.
-- Tokens are never sent to the browser, never put in prompts, never logged, never placed in a sandbox VM.
+- Tokens are never sent to the browser, never put in prompts, never placed in a sandbox VM, and our code never logs them. One caveat: a URL the model chose can itself carry a secret (`?access_token=…`), and tool arguments and results are logged. So the audit log also cleans URLs — credentials in `user:pass@` and secret-looking query parameters are replaced with `[redacted]`, and tool arguments are parsed before logging so nested credential keys are caught (`lib/agent/runs.ts`, `lib/agent/runner.ts`). That is a safety net based on names, not a guarantee.
 - `.env` holds our own secrets (`NEXTAUTH_SECRET`, `DATABASE_URL`, `OPENROUTER_API_KEY`, OAuth client secrets, the token-encryption key). It must never be committed. In production, secrets live in the hosting provider's secret store.
 
 ## Authorisation

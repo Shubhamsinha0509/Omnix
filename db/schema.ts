@@ -33,6 +33,10 @@ export const conversations = pgTable("conversations", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
+  // Lease held while the agent is answering in this conversation, so two overlapping
+  // messages (e.g. from two tabs) can't both generate from incomplete history. Released
+  // when the turn ends; the expiry only matters if a server dies mid-reply.
+  busyUntil: timestamp("busy_until"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

@@ -57,8 +57,9 @@ export default async function AgentPage({ params, searchParams }: Props) {
 
   return (
     <AgentChat
-      // Remount when switching agents or chats so state from the previous one doesn't leak.
-      key={`${agent.id}:${activeId ?? "new"}`}
+      // Remount only when switching agents. Switching chats is handled inside AgentChat,
+      // so the refresh that follows a brand-new chat getting its id doesn't wipe it.
+      key={agent.id}
       agent={{
         id: agent.id,
         name: agent.name,

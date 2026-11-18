@@ -42,6 +42,8 @@ export type ChatMessage = {
   activity?: Activity[];
   /** Shown under the reply but never saved: errors, safety notices, limits that were hit. */
   notes?: string[];
+  /** True only while this reply is still streaming. */
+  pending?: boolean;
 };
 
 /** A tool's icon in the activity list. Anything new falls back to a spanner. */
@@ -74,6 +76,35 @@ export default function AgentChat({
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  /**
+   * Which request owns the chat right now. New chat and switching chats bump it, so a
+   * request that was superseded can't touch the conversation id, the URL or refresh.
+   */
+  const requestRef = useRef(0);
+
+  // The page re-renders with a different conversation when the user opens another chat
+  // (or uses back/forward). Reset to it — but not when the "new" conversation is simply
+  // the one this component already started, which happens after its first reply.
+  const [shownFor, setShownFor] = useState(initialConversationId);
+  const [resets, setResets] = useState(0);
+  if (initialConversationId !== shownFor) {
+    setShownFor(initialConversationId);
+    if (initialConversationId !== conversationId) {
+      setConversationId(initialConversationId);
+      setChat(initialMessages);
+      setError(null);
+      setIsStreaming(false);
+      setResets((count) => count + 1);
+    }
+  }
+
+  // After a reset, stop the previous chat's reply and disown its request.
+  useEffect(() => {
+    if (resets === 0) return;
+    requestRef.current++;
+    abortRef.current?.abort();
+    abortRef.current = null;
+  }, [resets]);
 
   // Keep the newest message in view.
   useEffect(() => {
@@ -89,8 +120,28 @@ export default function AgentChat({
     window.history.replaceState(null, "", url);
   };
 
+  /**
+   * Opening a chat from the menu normally changes the page's props, which resets state
+   * above. The exception is the chat the page already loaded (e.g. after New chat): its
+   * props don't change, so reset to it here from the messages we already have.
+   */
+  const openChat = (id: string) => {
+    if (id === initialConversationId && id !== conversationId) {
+      requestRef.current++;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      setIsStreaming(false);
+      setConversationId(id);
+      setChat(initialMessages);
+      setError(null);
+    }
+  };
+
   const newChat = () => {
+    requestRef.current++; // the in-flight request no longer owns this chat
     abortRef.current?.abort();
+    abortRef.current = null;
+    setIsStreaming(false);
     setConversationId(null);
     setChat([]);
     setError(null);
@@ -103,13 +154,15 @@ export default function AgentChat({
     if (!text || isStreaming) return;
 
     const replyId = crypto.randomUUID();
+    const ticket = ++requestRef.current;
+    const owns = () => requestRef.current === ticket;
     setInput("");
     setError(null);
     setIsStreaming(true);
     setChat((prev) => [
       ...prev,
       { id: crypto.randomUUID(), role: "user", content: text },
-      { id: replyId, role: "assistant", content: "" },
+      { id: replyId, role: "assistant", content: "", pending: true },
     ]);
 
     const updateReply = (change: (message: ChatMessage) => ChatMessage) =>
@@ -139,7 +192,7 @@ export default function AgentChat({
       }
 
       const newId = res.headers.get("X-Conversation-Id");
-      if (newId && newId !== conversationId) {
+      if (newId && newId !== conversationId && owns()) {
         startedNewChat = !conversationId;
         setConversationId(newId);
         syncUrl(newId);
@@ -177,17 +230,21 @@ export default function AgentChat({
         }
       }
     } catch (err) {
-      if ((err as Error).name !== "AbortError") {
+      if ((err as Error).name !== "AbortError" && owns()) {
         setError((err as Error).message);
         // Put the message back so it isn't lost, and drop the empty reply bubble.
         setChat((prev) => prev.filter((m) => !(m.id === replyId && !m.content && !m.activity?.length)));
         setInput((current) => current || text);
       }
     } finally {
-      setIsStreaming(false);
-      abortRef.current = null;
-      // Pick up the new chat's title in the history menu.
-      if (startedNewChat) router.refresh();
+      // The reply is finished either way, so it stops showing "Thinking...".
+      updateReply((m) => ({ ...m, pending: false }));
+      if (owns()) {
+        setIsStreaming(false);
+        abortRef.current = null;
+        // Pick up the new chat's title in the history menu — only if the user is still on it.
+        if (startedNewChat) router.refresh();
+      }
     }
   };
 
@@ -224,6 +281,7 @@ export default function AgentChat({
                 <DropdownMenuItem
                   key={chatItem.id}
                   render={<Link href={`/workspace/agent/${agent.id}?c=${chatItem.id}`} />}
+                  onClick={() => openChat(chatItem.id)}
                 >
                   <span className="min-w-0 flex-1 truncate">{chatItem.title}</span>
                   {chatItem.id === conversationId ? (
@@ -311,6 +369,7 @@ export default function AgentChat({
                   {message.content ? (
                     <Markdown content={message.content} />
                   ) : (
+                    message.pending &&
                     !message.activity?.length && (
                       <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="size-4 animate-spin" />

@@ -73,7 +73,8 @@ function redact(value: unknown, depth = 0): Record<string, unknown> {
 function redactValue(value: unknown, depth: number): unknown {
   if (depth > 6) return "[too deep]";
   if (typeof value === "string") {
-    return value.length > MAX_LOGGED_STRING ? `${value.slice(0, MAX_LOGGED_STRING)}…[trimmed]` : value;
+    const clean = redactUrls(value);
+    return clean.length > MAX_LOGGED_STRING ? `${clean.slice(0, MAX_LOGGED_STRING)}…[trimmed]` : clean;
   }
   if (Array.isArray(value)) return value.slice(0, 50).map((item) => redactValue(item, depth + 1));
   if (value && typeof value === "object") {
@@ -85,4 +86,36 @@ function redactValue(value: unknown, depth: number): unknown {
     );
   }
   return value;
+}
+
+const URL_IN_TEXT = /\bhttps?:\/\/[^\s"'<>]+/gi;
+
+/**
+ * Secrets also travel inside URLs — `?access_token=…`, `?api_key=…`, `user:pass@host` —
+ * and a URL the model chose (web.fetch) or a page it read can carry one. Key-based
+ * redaction never sees those, so every URL in a logged string is cleaned here.
+ */
+function redactUrls(text: string) {
+  if (!text.includes("://")) return text;
+  return text.replace(URL_IN_TEXT, (match) => {
+    let url: URL;
+    try {
+      url = new URL(match);
+    } catch {
+      return match;
+    }
+    let changed = false;
+    if (url.username || url.password) {
+      url.username = "redacted";
+      url.password = "";
+      changed = true;
+    }
+    for (const key of [...url.searchParams.keys()]) {
+      if (SECRET_KEY.test(key) || /^(sig|signature|code|key|auth|session|sid)$/i.test(key)) {
+        url.searchParams.set(key, "[redacted]");
+        changed = true;
+      }
+    }
+    return changed ? url.toString() : match;
+  });
 }

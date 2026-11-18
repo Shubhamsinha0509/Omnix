@@ -7,7 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { agents, db } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { AVATAR_SEED_PATTERN } from "@/components/custom/workspace/AgentAvatar";
-import { MAX_AGENT_INSTRUCTIONS, MAX_AGENT_NAME } from "@/components/custom/workspace/AgentFields";
+import { MAX_AGENT_INSTRUCTIONS, MAX_AGENT_NAME } from "@/lib/agent-limits";
 
 export type AgentInput = {
   name: string;

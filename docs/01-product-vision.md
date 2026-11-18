@@ -27,7 +27,7 @@ People repeat the same digital chores every day: triaging email, posting updates
 
 ## User journeys we must support
 
-1. **Chat with an agent** — ask it things, it uses tools to answer. *(Chat UI exists; tools don't yet.)*
+1. **Chat with an agent** — ask it things, it uses tools to answer. *(Chat UI exists; tools are built — `time.now`, `web.fetch`, `web.search` — though `web.search` has not yet run successfully.)*
 2. **Connect an app** — click "Connect Gmail", approve, done.
 3. **Give an agent a task** — "Every morning at 9, summarise my inbox and send it to Slack."
 4. **Review what it did** — see each run: what it read, what it decided, what it sent.

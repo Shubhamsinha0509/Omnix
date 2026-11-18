@@ -1,5 +1,7 @@
+import { lookup as dnsLookup, type LookupAddress, type LookupOptions } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { Agent, fetch, type Response } from "undici";
 
 import type { NativeToolDefinition, ToolDefinition } from "./types";
 
@@ -86,9 +88,12 @@ export const webFetch: ToolDefinition = {
     let redirects = 0;
     try {
       while (true) {
+        // A friendly early answer for obviously private targets. The binding check is
+        // `publicOnlyLookup`, which runs when the socket actually connects.
         await assertPublicUrl(target);
         response = await fetch(target, {
           signal,
+          dispatcher: publicOnlyAgent,
           redirect: "manual", // follow by hand so each hop is checked again
           headers: {
             // Identify ourselves honestly; some sites block unknown clients outright.
@@ -99,6 +104,8 @@ export const webFetch: ToolDefinition = {
 
         const location = response.headers.get("location");
         if (response.status >= 300 && response.status < 400 && location) {
+          // Release the connection: the redirect's body is never read.
+          await discard(response);
           if (++redirects > MAX_REDIRECTS) return { error: "Too many redirects." };
           target = normaliseUrl(new URL(location, target).toString());
           continue;
@@ -108,15 +115,17 @@ export const webFetch: ToolDefinition = {
     } catch (error) {
       if (timeout.aborted) return { error: `The page took longer than ${FETCH_TIMEOUT_MS / 1000}s to load.` };
       if (ctx.signal.aborted) return { error: "Cancelled." };
-      return { error: `Couldn't reach that URL: ${(error as Error).message}` };
+      return { error: `Couldn't reach that URL: ${describeFetchError(error)}` };
     }
 
     if (!response.ok) {
+      await discard(response);
       return { error: `The site returned ${response.status} ${response.statusText}.` };
     }
 
     const contentType = (response.headers.get("content-type") ?? "").toLowerCase();
     if (!READABLE_TYPES.some((type) => contentType.includes(type))) {
+      await discard(response);
       return { error: `That URL isn't readable text (content type: ${contentType || "unknown"}).` };
     }
 
@@ -187,14 +196,67 @@ async function assertPublicUrl(input: string) {
   }
 }
 
+/**
+ * DNS lookup used for every connection `web.fetch` makes. It refuses the connection if
+ * the name resolves to a private address, and the socket then connects to exactly the
+ * address checked here — so a DNS answer that changes between our check and the connect
+ * (DNS rebinding) can't slip a private address through. Host header and TLS name are
+ * untouched, because only the address resolution is replaced.
+ *
+ * Node skips `lookup` for IP literals, which is why `assertPublicUrl` still checks those.
+ */
+function publicOnlyLookup(
+  hostname: string,
+  options: LookupOptions | number | undefined,
+  callback: (error: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void,
+) {
+  const opts: LookupOptions = typeof options === "object" && options !== null ? options : {};
+  dnsLookup(hostname, { ...opts, all: true }, (error: NodeJS.ErrnoException | null, list: LookupAddress[]) => {
+    if (error) return callback(error, opts.all ? [] : "");
+    if (list.length === 0 || list.some((entry) => isPrivateAddress(entry.address))) {
+      return callback(
+        Object.assign(new Error("That address is on a private network and can't be fetched."), {
+          code: "EPRIVATE",
+        }),
+        opts.all ? [] : "",
+      );
+    }
+    if (opts.all) return callback(null, list);
+    callback(null, list[0].address, list[0].family);
+  });
+}
+
+/** Connection pool for `web.fetch` only: every connection goes through the check above. */
+const publicOnlyAgent = new Agent({ connect: { lookup: publicOnlyLookup } });
+
+/** Lets go of a response we aren't going to read, so its connection is freed. */
+async function discard(response: Response) {
+  await response.body?.cancel().catch(() => {});
+}
+
+/** undici wraps connection errors; surface the reason we gave, not "fetch failed". */
+function describeFetchError(error: unknown) {
+  const cause = (error as { cause?: unknown })?.cause;
+  if (cause instanceof Error) return cause.message;
+  return (error as Error)?.message ?? "unknown error";
+}
+
 function isPrivateAddress(address: string): boolean {
   if (isIP(address) === 6) {
     const ip = address.toLowerCase();
     if (ip === "::" || ip === "::1") return true;
     if (ip.startsWith("fe80") || ip.startsWith("fc") || ip.startsWith("fd")) return true;
-    // IPv4 written as IPv6, e.g. ::ffff:127.0.0.1
-    const mapped = ip.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-    return mapped ? isPrivateAddress(mapped[1]) : false;
+    // IPv4 written as IPv6. The URL parser normalises ::ffff:127.0.0.1 to the hex form
+    // ::ffff:7f00:1, so both spellings must be recognised.
+    const dotted = ip.match(/^(?:0{0,4}:){0,5}:?ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (dotted) return isPrivateAddress(dotted[1]);
+    const hex = ip.match(/^(?:0{0,4}:){0,5}:?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (hex) {
+      const high = parseInt(hex[1], 16);
+      const low = parseInt(hex[2], 16);
+      return isPrivateAddress(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
+    }
+    return false;
   }
 
   const [a, b] = address.split(".").map(Number);

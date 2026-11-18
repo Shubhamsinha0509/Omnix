@@ -42,7 +42,7 @@
 Both use the **same agent runner**, so behaviour is identical:
 
 1. **Interactive (chat)** — user sends a message → API route runs the agent → reply streams to the browser. Short (seconds to a minute).
-2. **Background (task)** — schedule or event fires → Inngest function runs the agent step by step → result saved, user notified. Can take minutes or pause for hours waiting for approval.
+2. **Background (task)** — *planned for Phase 4, not built yet.* Schedule or event fires → Inngest function runs the agent step by step → result saved, user notified. Can take minutes or pause for hours waiting for approval.
 
 Rule of thumb: anything that might take longer than ~60 seconds, or needs to survive a server restart, runs in Inngest.
 

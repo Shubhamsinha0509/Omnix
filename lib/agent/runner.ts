@@ -35,24 +35,45 @@ export const LIMITS = {
 };
 
 /**
- * A server tool the API tier or the chosen model won't allow is dropped, not fatal: the
- * first refusal retries the turn without native tools and stops offering them.
+ * A server tool the API tier or the chosen model won't allow is dropped, not fatal: a
+ * refusal retries the turn without native tools. See decision D25.
  *
  * This was found the hard way on Gemini, where web search and our function declarations
  * travelled in one request, so a refused search killed messages that only needed
- * `time.now`. 402 (out of credits) is deliberately not in the list — dropping search
- * wouldn't help, and the user needs to see the real reason. See decision D25.
+ * `time.now`. 402 (out of credits) is deliberately not handled here — dropping search
+ * wouldn't help, and the user needs to see the real reason.
+ *
+ * - Capability refusals (400/403/404: this model or account can't use the tool) won't
+ *   fix themselves, so they block native tools for every later run on this server
+ *   instance, until it restarts.
+ * - A rate limit (429) is temporary, so it only drops native tools for the current run.
  */
-const UNAVAILABLE_STATUSES = new Set([400, 403, 404, 429]);
+const CAPABILITY_REFUSALS = new Set([400, 403, 404]);
+const TRANSIENT_REFUSALS = new Set([429]);
 
-/**
- * Deliberately module-level: one refusal teaches every later run on this server
- * instance, and a restart (or a topped-up account) gives search another chance.
- */
+/** Module-level on purpose: a capability refusal teaches every later run on this instance. */
 let nativeToolsBlocked = false;
 
-function isUnavailable(error: unknown) {
-  return error instanceof APIError && UNAVAILABLE_STATUSES.has(error.status ?? 0);
+function refusalKind(error: unknown): "capability" | "transient" | null {
+  if (!(error instanceof APIError)) return null;
+  const status = error.status ?? 0;
+  if (CAPABILITY_REFUSALS.has(status)) return "capability";
+  if (TRANSIENT_REFUSALS.has(status)) return "transient";
+  return null;
+}
+
+/**
+ * Parses the JSON arguments a model wrote, for logging. The raw string is never logged:
+ * once parsed, the normal key-based redaction can see nested credential fields, and a
+ * string that doesn't parse is recorded only by its length.
+ */
+function argsForLog(raw: string): unknown {
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { invalidJson: true, length: raw.length };
+  }
 }
 
 export type RunTrigger = "chat" | "manual" | "schedule" | "event";
@@ -121,34 +142,55 @@ export async function runAgent(options: RunAgentOptions): Promise<RunOutcome> {
   /** Notes are shown to the user but never saved, so the model doesn't see them later. */
   const note = (text: string) => emit({ t: "note", v: text });
 
+  /** Native tools dropped for this run only (e.g. after a rate limit). */
+  let nativeToolsOffForRun = false;
+
+  /**
+   * Text is added to the run's reply as it streams, not when the turn completes, so
+   * words the user has already seen are still saved if the turn fails halfway.
+   */
+  const onText = (text: string) => {
+    reply += text;
+    emit({ t: "text", v: text });
+  };
+
   /** One model turn, falling back to no native tools if they aren't allowed. */
   async function turnWithFallback() {
-    const chosen = nativeToolsBlocked ? executableOnly : tools;
+    // Server-side searches share the run's tool budget, so stop offering them once it's spent.
+    const budgetLeft = toolCalls < LIMITS.maxToolCalls;
+    const chosen = nativeToolsBlocked || nativeToolsOffForRun || !budgetLeft ? executableOnly : tools;
     try {
-      return await streamTurn({ messages, modelTools: buildModelTools(chosen), signal, emit });
+      return await streamTurn({ messages, modelTools: buildModelTools(chosen), signal, onText });
     } catch (error) {
-      if (!chosen.some(isNativeTool) || !isUnavailable(error)) throw error;
-      nativeToolsBlocked = true;
+      const kind = refusalKind(error);
+      if (!chosen.some(isNativeTool) || !kind) throw error;
+      if (kind === "capability") nativeToolsBlocked = true;
+      nativeToolsOffForRun = true;
       await log("error", "web.search", {
-        reason: "server_tool_unavailable",
+        reason: kind === "capability" ? "server_tool_unavailable" : "server_tool_rate_limited",
         status: (error as APIError).status,
       });
-      note("Web search isn't available for this model or account, so I'll answer without it.");
-      return await streamTurn({ messages, modelTools: buildModelTools(executableOnly), signal, emit });
+      note(
+        kind === "capability"
+          ? "Web search isn't available for this model or account, so I'll answer without it."
+          : "Web search is rate limited right now, so I'll answer without it this time.",
+      );
+      return await streamTurn({ messages, modelTools: buildModelTools(executableOnly), signal, onText });
     }
   }
 
   try {
     for (let iteration = 1; iteration <= LIMITS.maxIterations; iteration++) {
       const turn = await turnWithFallback();
-      reply += turn.text;
       inputTokens += turn.inputTokens;
       outputTokens += turn.outputTokens;
+      // Searches OpenRouter ran inside this turn spend the same budget as our own tools.
+      toolCalls += turn.serverToolCalls;
 
       await log("model", null, {
         iteration,
         text: turn.text,
-        calls: turn.calls.map((call) => ({ name: call.name, args: call.args })),
+        calls: turn.calls.map((call) => ({ name: call.name, args: argsForLog(call.args) })),
         citations: turn.citations,
         finishReason: turn.finishReason,
       });
@@ -198,7 +240,8 @@ export async function runAgent(options: RunAgentOptions): Promise<RunOutcome> {
       }
     }
 
-    const status = reply ? "succeeded" : "failed";
+    // A stop can land between turns without anything throwing; it is still a cancellation.
+    const status = signal.aborted ? "cancelled" : reply ? "succeeded" : "failed";
     await finishRun({ runId, status, inputTokens, outputTokens });
     return { runId, reply, status };
   } catch (error) {
@@ -233,7 +276,8 @@ async function streamTurn(args: {
   messages: ChatCompletionMessageParam[];
   modelTools: ModelTool[];
   signal: AbortSignal;
-  emit: (event: RunEvent) => void;
+  /** Called with each piece of reply text as it arrives. */
+  onText: (text: string) => void;
 }) {
   const stream = await getModelClient().chat.completions.create(
     {
@@ -262,7 +306,7 @@ async function streamTurn(args: {
 
     if (delta?.content) {
       text += delta.content;
-      args.emit({ t: "text", v: delta.content });
+      args.onText(delta.content);
     }
 
     for (const fragment of delta?.tool_calls ?? []) {
@@ -284,7 +328,11 @@ async function streamTurn(args: {
     if (chunk.usage) {
       inputTokens = chunk.usage.prompt_tokens ?? inputTokens;
       outputTokens = chunk.usage.completion_tokens ?? outputTokens;
-      serverToolCalls = chunk.usage.server_tool_use_details?.tool_calls_executed ?? serverToolCalls;
+      serverToolCalls = Math.max(
+        serverToolCalls,
+        chunk.usage.server_tool_use_details?.tool_calls_executed ?? 0,
+        chunk.usage.server_tool_use?.web_search_requests ?? 0,
+      );
     }
   }
 
@@ -339,6 +387,8 @@ type StreamChunk = {
     prompt_tokens?: number;
     completion_tokens?: number;
     server_tool_use_details?: { tool_calls_requested?: number; tool_calls_executed?: number };
+    /** Search count as some OpenRouter responses report it; read as well, never relied on alone. */
+    server_tool_use?: { web_search_requests?: number };
   } | null;
 };
 
@@ -359,7 +409,7 @@ async function executeCall(args: {
 
   if (!tool) {
     // The model asked for something that isn't on its list; tell it so it can recover.
-    await log("tool_call", call.name, { args: call.args, error: "unknown tool" });
+    await log("tool_call", call.name, { args: argsForLog(call.args), error: "unknown tool" });
     return toolMessage(call.id, { error: `There is no tool called "${call.name}".` });
   }
 
@@ -370,7 +420,7 @@ async function executeCall(args: {
   try {
     parsed = call.args.trim() ? JSON.parse(call.args) : {};
   } catch {
-    await log("tool_call", tool.key, { args: call.args, error: "invalid JSON" });
+    await log("tool_call", tool.key, { args: argsForLog(call.args), error: "invalid JSON" });
     emit({ t: "activity", id: activityId, tool: tool.key, label: tool.label, status: "error", detail: "bad arguments" });
     return toolMessage(call.id, { error: "Your arguments weren't valid JSON. Try the call again." });
   }

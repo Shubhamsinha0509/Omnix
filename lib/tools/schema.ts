@@ -27,7 +27,9 @@ export function validateArgs(
   }
 
   for (const [name, raw] of Object.entries(input)) {
-    const property = schema.properties[name];
+    // Own properties only: a key like "constructor" or "__proto__" must not pick up
+    // something inherited from Object.prototype and be treated as a declared property.
+    const property = Object.hasOwn(schema.properties, name) ? schema.properties[name] : undefined;
     if (!property) {
       // Ignore extras rather than failing: the answer matters more than the model's tidiness.
       continue;
