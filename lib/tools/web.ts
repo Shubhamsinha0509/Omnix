@@ -3,6 +3,7 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import { Agent, fetch, type Response } from "undici";
 
+import { extractTitle, htmlToText } from "@/lib/html-text";
 import type { NativeToolDefinition, ToolDefinition } from "./types";
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -293,54 +294,4 @@ async function readCapped(response: Response, signal: AbortSignal) {
     await reader.cancel().catch(() => {});
   }
   return text;
-}
-
-function extractTitle(html: string) {
-  const match = html.match(/<title[^>]*>([\s\S]{0,300}?)<\/title>/i);
-  return match ? decodeEntities(match[1]).replace(/\s+/g, " ").trim() || undefined : undefined;
-}
-
-/**
- * Turns HTML into something worth spending tokens on: no scripts, styles or tags —
- * just the words, with blank lines where the blocks were.
- */
-function htmlToText(html: string) {
-  return decodeEntities(
-    html
-      .replace(/<(script|style|noscript|svg|template|iframe)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
-      .replace(/<!--[\s\S]*?-->/g, " ")
-      .replace(/<\/(p|div|section|article|li|tr|h[1-6]|blockquote)>/gi, "\n")
-      .replace(/<(br|hr)\s*\/?>/gi, "\n")
-      .replace(/<[^>]+>/g, " "),
-  )
-    .replace(/[ \t ]+/g, " ")
-    .replace(/ ?\n ?/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function decodeEntities(text: string) {
-  const named: Record<string, string> = {
-    amp: "&",
-    lt: "<",
-    gt: ">",
-    quot: '"',
-    apos: "'",
-    nbsp: " ",
-    mdash: "—",
-    ndash: "–",
-    hellip: "…",
-    rsquo: "’",
-    lsquo: "‘",
-    rdquo: "”",
-    ldquo: "“",
-  };
-  return text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
-    if (entity.startsWith("#")) {
-      const code =
-        entity[1]?.toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
-      return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
-    }
-    return named[entity.toLowerCase()] ?? match;
-  });
 }

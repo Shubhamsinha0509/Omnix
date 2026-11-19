@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ChevronsUpDown, Plus, Store } from "lucide-react";
+import { ChevronsUpDown, Plug, Plus, Store } from "lucide-react";
 import { cn } from "cn";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -104,9 +104,18 @@ const AppSidebar = ({ agents }: { agents: SidebarAgent[] }) => {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Footer: marketplace + current user */}
+      {/* Footer: connections, marketplace + current user */}
       <SidebarFooter className="gap-1 px-3 pb-4">
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={pathname.startsWith("/workspace/connections")}
+              render={<Link href="/workspace/connections" />}
+            >
+              <Plug />
+              <span>Connections</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               isActive={pathname.startsWith("/workspace/marketplace")}

@@ -47,11 +47,13 @@ The app needs one key to work: `OPENROUTER_API_KEY`. Without it every chat retur
 
 ### Choosing the model
 
-`CHAT_MODEL` in `lib/ai.ts` is the one place the model is set, as an OpenRouter model id.
-It is `nvidia/nemotron-3-ultra-550b-a55b:free` today — free, for testing (D32). Free models are rate
-limited and their providers may log prompts, so switch back to a paid model such as
-`deepseek/deepseek-chat-v3.1` ($0.25 / $0.95 per 1M tokens in/out) before agents read real
-email.
+Set `OPENROUTER_MODEL` in `.env` to an OpenRouter model id, then restart `npm run dev`.
+That one setting applies to every agent; no code change is needed (D39). Left empty, the
+free default in `lib/ai.ts` is used (`nvidia/nemotron-3-ultra-550b-a55b:free`, D38). The
+paid model we recommend is `deepseek/deepseek-chat-v3.1` ($0.25 / $0.95 per 1M tokens
+in/out), which needs credit on the account. The free `:free` models are fine for poking at the chat, but don't
+point one at a real inbox: they are rate limited in a way an agent loop feels, and a free
+provider may log the prompts — which from Phase 3 contain somebody's email (D32, D34).
 
 One key reaches every model, so switching is a one-line change — that is the main reason
 we are on OpenRouter (decision D26). Browse ids and prices at
@@ -80,6 +82,74 @@ its `supported_parameters` before picking one, or the agent loses every tool it 
 
 If the account runs dry, OpenRouter answers with **402** and the chat says so in plain
 words rather than failing silently (`lib/agent/errors.ts`).
+
+## Connecting Gmail
+
+Gmail is a **separate** OAuth from signing in (D36): signing in says who you are,
+connecting Gmail lets an agent into your mailbox. Both use the same Google OAuth client by
+default, so there is one thing to set up.
+
+The scopes are Google **restricted scopes**, which means that until the app is verified it
+works only for accounts you have added as test users — up to 100 of them.
+
+### In Google Cloud Console
+
+1. Open your project → **APIs & Services**.
+2. **Enable the Gmail API** (Library → "Gmail API" → Enable). Nothing works without this.
+3. **OAuth consent screen** → set User type to *External*, and leave the publishing status
+   as **Testing**.
+4. **Audience → Test users** → add every Google account you want to connect, including
+   your own. An account that isn't on this list gets "access blocked" at the consent
+   screen, and that is the single most common reason connecting fails.
+5. **Data access → Add or remove scopes** → add:
+   - `https://www.googleapis.com/auth/gmail.readonly`
+   - `https://www.googleapis.com/auth/gmail.compose`
+6. **Credentials → your OAuth 2.0 Client ID** → under *Authorised redirect URIs* add:
+   - `http://localhost:3000/api/connections/gmail/callback`
+   - and the same path on your deployed origin when you have one.
+
+   It must match exactly — Omnix builds the URI from `NEXT_PUBLIC_APP_URL`, not from the
+   incoming request, so those two have to agree.
+
+### In Omnix
+
+1. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` (the same pair sign-in uses).
+   To keep them separate, set `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` as well and they
+   win — worth doing before verification, so a restricted-scope review can't hold up
+   sign-in.
+2. `TOKEN_ENCRYPTION_KEY` must be set, or the token can't be stored and the connect flow
+   stops before it starts. Generate one with:
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+   ```
+
+3. Restart `npm run dev` — `.env` is read at boot.
+4. **Connections** in the sidebar → **Connect Gmail** → approve, leaving both boxes
+   ticked. You come back to the page with the address shown. (Unticking a box is allowed:
+   the page says what is missing and the affected tools refuse with an explanation.)
+5. Open an agent → **Settings → Tools** → switch on the Gmail tools you want. Connecting
+   an account gives no agent access on its own; this second step is the point.
+
+### Walking the loop
+
+1. **Read:** "summarise my unread email from the last two days". The chat shows
+   "Searching email", then "Reading email" per message.
+2. **Draft:** "draft a reply to the one from X saying I'll look tomorrow". With approval
+   left on you get a card first; approve it and the draft appears in Gmail's Drafts.
+3. **Send:** "send it". The card shows the real recipient, subject and body — check it is
+   the actual text and not the agent's description of it — then Approve. Reject on a card
+   must leave the mailbox untouched.
+4. **The log:** `npm run db:studio`, or
+   `select type, tool, created_at from run_steps order by created_at desc limit 20;`.
+   An approved send has an `approval` step between its `tool_call` and `tool_result`.
+
+### Before Google verification
+
+Public Gmail access needs consent-screen verification **and** an annual third-party
+security assessment (CASA) — weeks and real money. Read Google's current requirements
+early; they gate launch, not development. See
+[security](07-security.md#google-verification).
 
 ## How we work
 

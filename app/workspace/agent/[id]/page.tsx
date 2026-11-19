@@ -3,7 +3,9 @@ import { and, asc, eq } from "drizzle-orm";
 
 import AgentChat from "@/components/custom/workspace/AgentChat";
 import { conversations, db, messages } from "@/db";
+import { listPendingForConversation } from "@/lib/agent/approvals";
 import { hasModelKey } from "@/lib/ai";
+import { TOOLS } from "@/lib/tools";
 import { UUID_PATTERN, getOwnedAgent, listConversations } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -47,13 +49,18 @@ export default async function AgentPage({ params, searchParams }: Props) {
     activeId = chats[0]?.id ?? null;
   }
 
-  const history = activeId
-    ? await db
-        .select({ id: messages.id, role: messages.role, content: messages.content })
-        .from(messages)
-        .where(eq(messages.conversationId, activeId))
-        .orderBy(asc(messages.createdAt))
-    : [];
+  // The reply and any card still waiting in it. An approval outlives the stream that
+  // drew it, so reopening a chat has to show it again (decision D35).
+  const [history, pending] = activeId
+    ? await Promise.all([
+        db
+          .select({ id: messages.id, role: messages.role, content: messages.content })
+          .from(messages)
+          .where(eq(messages.conversationId, activeId))
+          .orderBy(asc(messages.createdAt)),
+        listPendingForConversation(user.id, activeId),
+      ])
+    : [[], []];
 
   return (
     <AgentChat
@@ -69,6 +76,15 @@ export default async function AgentPage({ params, searchParams }: Props) {
       conversations={chats}
       initialConversationId={activeId}
       initialMessages={history}
+      initialApprovals={pending.map((approval) => ({
+        id: approval.id,
+        tool: approval.tool,
+        label: TOOLS[approval.tool]?.label ?? "Waiting for approval",
+        summary: approval.summary,
+        details: approval.details,
+        expiresAt: approval.expiresAt.toISOString(),
+        resumable: approval.resumable,
+      }))}
       aiReady={hasModelKey()}
     />
   );

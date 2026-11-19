@@ -75,7 +75,7 @@ Rule of thumb: anything that might take longer than ~60 seconds, or needs to sur
 | UI | React 19, Tailwind CSS v4, shadcn/ui (`base-nova` style, Base UI primitives), Lucide icons |
 | Auth | next-auth 4 (JWT) |
 | DB | Neon Postgres, Drizzle ORM 0.45, `postgres` driver |
-| AI | OpenRouter via the `openai` SDK, model `nvidia/nemotron-3-ultra-550b-a55b:free` for testing (D32; set in `lib/ai.ts`) |
+| AI | OpenRouter via the `openai` SDK, model `nvidia/nemotron-3-ultra-550b-a55b:free` for testing (D38; set in `lib/ai.ts`) |
 | Jobs | Inngest 3 |
 | Avatars | DiceBear `clay` style (by seed) |
 | Markdown | `react-markdown` + `remark-gfm`; code blocks highlighted by `shiki` |

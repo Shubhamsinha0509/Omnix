@@ -1,5 +1,17 @@
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, pgTable, serial, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  serial,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 // Every timestamp is `withTimezone: true` (Postgres `timestamptz`). A plain `timestamp`
 // has no zone, and the driver reads it back in the server's local zone — on a machine in
@@ -153,6 +165,94 @@ export const runSteps = pgTable("run_steps", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+/**
+ * Which tools an agent may use, and with which connected account.
+ *
+ * A row here records a deliberate choice. With no row, a tool falls back to its default:
+ * the ones that need no account (`time.now`, `web.*`) are on for every agent, and anything
+ * that reaches a connected account is off until the user turns it on. That is why `enabled`
+ * exists as well as the row — switching `web.search` off is a choice too, and absence
+ * cannot express it. See `resolveAgentTools()` in lib/tools/selection.ts.
+ *
+ * `approval` is the user's preference, not the final word: `read` tools never ask and
+ * `destructive` tools always do, whatever is stored here (decision D29).
+ */
+export const agentTools = pgTable(
+  "agent_tools",
+  {
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    // Tool key, e.g. "gmail.search".
+    tool: text("tool").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    // The account this agent uses for this tool. Null for tools that need no connection.
+    // Set to null rather than deleted when the account is disconnected, so the tool shows
+    // as "needs reconnecting" instead of silently vanishing from the agent's settings.
+    connectionId: uuid("connection_id").references(() => connections.id, { onDelete: "set null" }),
+    approval: text("approval", { enum: ["never", "always"] })
+      .notNull()
+      .default("always"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // One grant per tool per agent: enabling a tool twice updates the same row.
+    primaryKey({ columns: [table.agentId, table.tool] }),
+  ],
+);
+
+/**
+ * An action the agent wants to take that the user must agree to first — the main defence
+ * against prompt injection (D10, [security](../docs/07-security.md)).
+ *
+ * `payload` is the exact, already-validated arguments. When the user approves, *this* is
+ * what runs — never a freshly generated call, which an injected instruction could have
+ * changed between the card being shown and the click.
+ *
+ * `resume` is the model conversation the paused turn will continue from, because a chat
+ * turn is one HTTP request and cannot sit waiting (decision D35). It holds whatever the
+ * tools had read by then, so it is cleared the moment the decision is acted on.
+ */
+export const approvals = pgTable(
+  "approvals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // Set for chat approvals, so the card can be shown back in the right conversation.
+    conversationId: uuid("conversation_id").references(() => conversations.id, { onDelete: "cascade" }),
+    // The `tool_call` step this is waiting on, for the run timeline in Phase 4.
+    stepId: uuid("step_id").references(() => runSteps.id, { onDelete: "set null" }),
+    tool: text("tool").notNull(),
+    // The model's own id for the call, so the result answers the right one on resume.
+    toolCallId: text("tool_call_id").notNull(),
+    // Plain English: "Send an email to anna@client.com".
+    summary: text("summary").notNull(),
+    // The real recipient, subject and body as label/value pairs — what the card shows,
+    // so the user reads the action itself rather than the agent's description of it.
+    details: jsonb("details").notNull().default([]),
+    payload: jsonb("payload").notNull().default({}),
+    resume: jsonb("resume").notNull().default({}),
+    status: text("status", { enum: ["pending", "approved", "rejected", "expired"] })
+      .notNull()
+      .default("pending"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    // 24 hours, matching the `waitForEvent` timeout background runs will use in Phase 4.
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("approvals_user_status_idx").on(table.userId, table.status),
+    index("approvals_conversation_idx").on(table.conversationId),
+    index("approvals_run_idx").on(table.runId),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Agent = typeof agents.$inferSelect;
@@ -164,3 +264,5 @@ export type NewConnection = typeof connections.$inferInsert;
 export type Run = typeof runs.$inferSelect;
 export type NewRun = typeof runs.$inferInsert;
 export type RunStep = typeof runSteps.$inferSelect;
+export type AgentTool = typeof agentTools.$inferSelect;
+export type Approval = typeof approvals.$inferSelect;

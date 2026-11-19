@@ -1,6 +1,6 @@
 # 4. Agent runtime
 
-How an agent actually thinks and acts. **Built** in Phase 2 (`lib/agent/`, `lib/tools/`)
+How an agent actually thinks and acts. **Built** in Phases 2 and 3 (`lib/agent/`, `lib/tools/`)
 except where marked otherwise.
 
 ## The loop
@@ -10,12 +10,12 @@ Every agent run — chat or background task — goes through one function, `runA
 ```
 runAgent({ agent, input, trigger, history })
   1. Build the system instruction from the agent's instructions
-  2. Collect the tools this agent is allowed to use (from agent_tools, Phase 3)
+  2. Collect the tools this agent is allowed to use (resolveAgentTools, from agent_tools)
   3. Call the model with: instruction + history + input + tool declarations
   4. If the model asks to call tools:
        for each call:
          - validate the arguments against the tool's schema
-         - if the tool needs approval → pause the run (see Approvals, Phase 3)
+         - if the tool needs approval → pause the run (see Approvals)
          - otherwise execute it, log the result
        send the results back to the model, go to 4
   5. When the model answers without tool calls → done; save the answer and usage
@@ -57,11 +57,16 @@ model replies with `tool_calls`. Three details matter in practice:
 
 ### What the runner reports as it goes
 
-`runAgent()` takes an `emit` callback and sends three kinds of event (`lib/agent/events.ts`):
-`text` (a piece of the reply), `activity` (a tool starting or finishing) and `note`
+`runAgent()` takes an `emit` callback and sends four kinds of event (`lib/agent/events.ts`):
+`text` (a piece of the reply), `activity` (a tool starting or finishing), `note`
 (something the user should see that isn't part of the reply — a safety refusal, a limit
-that was hit). The chat route forwards them to the browser as NDJSON (decision D23);
-background runs in Phase 4 will log them instead.
+that was hit) and `approval` (the agent is asking permission; the turn stops there). The
+chat route forwards them to the browser as NDJSON (decision D23); background runs in
+Phase 4 will log them instead.
+
+Only `text` is saved to the conversation. `activity` and `note` last for the turn (D24).
+An `approval` outlives both, in the `approvals` table, because the user may come back to
+it tomorrow — so reopening a chat shows any card still waiting in it.
 
 ## Tools
 
@@ -80,9 +85,24 @@ type ToolDefinition = {
 };
 ```
 
-The real shape is in `lib/tools/types.ts`; `label` (what the chat shows while the tool
-runs) is the only addition. Which tools an agent may use comes from `toolsForAgent()` —
-every read-only tool today, the agent's own choices from `agent_tools` in Phase 3.
+The real shape is in `lib/tools/types.ts`; the additions are `label` (what the chat shows
+while the tool runs) and `summarise` (the plain-English approval card, see below).
+
+Which tools an agent may use comes from `resolveAgentTools()` in `lib/tools/selection.ts`,
+which reads the agent's own grants from `agent_tools` and returns, per tool, **the account
+to use and whether approval is required**. Three rules live there:
+
+- **No row means the default**: on for tools needing no account, off for anything that
+  reaches a connected one. Least privilege, and existing agents keep what they had.
+- **A tool whose account is missing is left out entirely**, not offered and failed — a
+  model told it can read email, which then can't, wastes a turn apologising.
+- **The risk floor** (D29): `read` never asks, `destructive` always asks, and only `write`
+  honours the user's stored preference.
+
+Credentials are not part of that: the resolved tool carries a `connection_id`, and the
+token is decrypted one call before it is used, by `openConnection()` in
+`lib/integrations/access.ts`, which also refreshes it and marks the connection revoked
+when the provider stops accepting it.
 
 **Native tools** are the exception: `web.search` is OpenRouter's `openrouter:web_search`
 **server tool** (decision D27), so there is nothing of ours to execute — the model decides
@@ -94,8 +114,8 @@ learns what it did from the `url_citation` annotations and
 If the provider refuses a server tool, the run doesn't die with it: see D25.
 
 - Tools come from two sources: **built-in** (defined in code, e.g. Gmail, web, sandbox) and **MCP** (loaded from the user's connected, allow-listed MCP servers and wrapped in the same `ToolDefinition` shape, with `risk: "write"` unless we've reviewed the tool as read-only).
-- `ctx` carries the user, agent, the right connection's credentials (fetched server-side, never shown to the model) and the run id for logging.
-- **Default approval rule:** `read` → no approval; `write` and `destructive` → approval required unless the user turns it off for that agent and tool.
+- `ctx` carries the user, agent, run id, timezone, an abort signal, and `auth` — the right connection, which decrypts and refreshes its token only when the tool asks for one. Nothing in `ctx` is ever shown to the model.
+- **Default approval rule:** `read` → no approval; `write` → approval unless the user turns it off for that agent and tool; `destructive` → always, with no off switch (D29).
 
 ### First tools to build
 
@@ -103,9 +123,9 @@ If the provider refuses a server tool, the run doesn't die with it: see D25.
 |---|---|---|
 | `web.search` (OpenRouter server tool), `web.fetch` (ours) | read | 2 — **built** |
 | `time.now` (current date/time in the user's timezone) | read | 2 — **built** |
-| `gmail.search`, `gmail.read` | read | 3 |
-| `gmail.create_draft` | write | 3 |
-| `gmail.send` | write (approval) | 3 |
+| `gmail.search`, `gmail.read` | read | 3 — **built** |
+| `gmail.create_draft` | write | 3 — **built** |
+| `gmail.send` | write (approval) | 3 — **built** |
 | Slack, Notion, Jira tools (from their MCP servers) | mixed — approval by default | 5 |
 | `sandbox.run_code`, `sandbox.browser`, `sandbox.files` | write | 6 |
 
@@ -124,12 +144,34 @@ That is not a guarantee that an external action happens only once. If a worker d
 
 ## Approvals
 
-1. Tool with approval required is about to run → create an `approvals` row with a **plain-English summary** of exactly what will happen ("Send email to anna@client.com, subject 'Invoice', body …").
-2. Run status → `waiting_approval`; notify the user (in-app badge first, email/Slack later).
-3. Inngest `step.waitForEvent("approval/decided", { timeout: "24h" })`.
-4. Approved → execute the exact stored payload (not a regenerated one). Rejected or expired → tell the model it was declined and let it finish.
+**Built** for chat in Phase 3 (`lib/agent/approvals.ts`, `resumeAgent()` in the runner,
+`POST /api/approvals/:id`). Background runs get the same table and card in Phase 4.
 
-In chat, the approval appears inline as a card with Approve / Reject.
+1. A tool needing approval is about to run → nothing is executed. An `approvals` row is
+   written with the **exact validated arguments** and a card: a one-line summary plus the
+   action field by field — the real recipient, subject and body (`summarise` on the tool).
+2. The run's status becomes `waiting_approval` and the turn **stops there**. Any further
+   tool calls the model made in the same turn are answered "not run"; it may ask again
+   after the decision. One card at a time, so "Approve" is never ambiguous.
+3. The paused turn's model conversation is stored on the row. A chat turn is one HTTP
+   request and cannot sit waiting for a click, so the stream ends, the partial reply is
+   saved, and the card survives a reload in the `approvals` table (decision D35). Phase 4
+   uses Inngest's `step.waitForEvent("approval/decided", { timeout: "24h" })` instead and
+   keeps the state in the step.
+4. **Approved** → the stored payload runs, not a call the model regenerates. That is the
+   security property: what happens is what the card showed, even if the mailbox the agent
+   read has changed its mind since. **Rejected or expired** → the model is told it was
+   declined and gets to finish.
+5. Either way the agent carries on from the stored conversation and streams the rest of
+   its reply, which is saved as its own message — so the chat reads reply → card → reply.
+   The stored copy of the conversation is deleted as soon as the decision is acted on,
+   because it holds whatever the agent had read.
+
+A decision is claimed with one conditional `UPDATE`, so a double-click or a second tab
+cannot make the same email go out twice, and resuming takes the conversation lease like
+any other turn (D30).
+
+In chat the approval appears inline as a card with Approve / Reject.
 
 ## Memory
 

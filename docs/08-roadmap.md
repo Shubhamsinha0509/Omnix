@@ -49,12 +49,29 @@ quota on Gemini's free tier).
 **Done when:** "summarise my unread email" works in chat, and sending requires approval.
 
 - [x] `connections` table + token encryption (`lib/crypto.ts`) — plus `lib/integrations/connections.ts`, the only way tokens are read or written
-- [ ] Connect / disconnect Gmail (separate OAuth from sign-in), token refresh
-- [ ] Tools: `gmail.search`, `gmail.read`, `gmail.create_draft`, `gmail.send`
-- [ ] Approvals: table, inline approval card in chat, execute stored payload
-- [ ] Agent settings → Tools: choose tools + connection per agent
-- [ ] Connections page
-- [ ] Add test users in Google Cloud; start reading Google's verification requirements
+- [x] Connect / disconnect Gmail (separate OAuth from sign-in), token refresh — `app/api/connections/gmail/`, `lib/integrations/google.ts`; refresh and revocation handling in `lib/integrations/access.ts`
+- [x] Tools: `gmail.search`, `gmail.read`, `gmail.create_draft`, `gmail.send` — `lib/tools/gmail.ts` over `lib/integrations/gmail.ts`
+- [x] Approvals: table, inline approval card in chat, execute stored payload — `lib/agent/approvals.ts`, `resumeAgent()`, `POST /api/approvals/:id` (decision D35)
+- [x] Agent settings → Tools: choose tools + connection per agent — `agent_tools` table, `resolveAgentTools()`, `components/custom/workspace/AgentTools.tsx`
+- [x] Connections page — `/workspace/connections`
+- [x] Google Cloud set up: Gmail API enabled, consent screen in Testing, test users added, redirect URI registered, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env` — steps in [connecting Gmail](README.md#connecting-gmail)
+- [ ] Walk the live loop against a real mailbox: connect → search → read → draft → send with an approval
+- [ ] Start reading Google's verification requirements (restricted scopes + CASA) — see [security](07-security.md#google-verification)
+- [ ] Switch back to a paid model before any of this touches a real inbox (D34) — **not done**: `CHAT_MODEL` in `lib/ai.ts` is still the free `:free` model (D38, no OpenRouter credit), so email an agent reads goes to a provider that may log prompts
+
+### What is verified, and what isn't
+
+Checked without Google credentials: the whole thing compiles and builds, both new tables
+match the schema, and the pure logic has been exercised directly — the header-injection
+guard on recipients (CRLF, bare newlines, multiple addresses and unbalanced brackets are
+all refused), HTML-to-text flattening, the tool schemas' caps, and the approval card's
+contents.
+
+**Not yet run against a live mailbox.** The Google Cloud side is now in place — Gmail API
+enabled, test users added, redirect URI registered, credentials in `.env` — so the flow is
+ready to try. Until someone walks it — connect → search → read → draft → send with an
+approval — the OAuth exchange, token refresh, real-world MIME parsing and the pause/resume
+path are code that type-checks rather than code that is known to work.
 
 ## Phase 4 — Tasks (agents work on their own)
 
