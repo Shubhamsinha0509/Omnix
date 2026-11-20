@@ -127,3 +127,16 @@
     @apply font-sans;
     }
 }
+
+/* Landing page motion: slow floating for agents and bubbles, drifting clouds. */
+@keyframes omnix-float {
+  0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); }
+  50% { transform: translateY(-14px) rotate(var(--tilt, 0deg)); }
+}
+@keyframes omnix-drift {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(24px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .omnix-motion { animation: none !important; }
+}

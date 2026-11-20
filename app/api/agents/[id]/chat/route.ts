@@ -1,28 +1,19 @@
-import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { conversations, db, messages } from "@/db";
 import { RUN_STREAM_CONTENT_TYPE, encodeEvent, type RunEvent } from "@/lib/agent/events";
 import { runAgent, type HistoryMessage } from "@/lib/agent/runner";
-import { UUID_PATTERN, getOwnedAgent } from "@/lib/agents";
+import {
+  CONVERSATION_LEASE,
+  claimConversation,
+  getOwnedAgent,
+  releaseConversation,
+} from "@/lib/agents";
 import { hasModelKey } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
 
 const MAX_MESSAGE = 8000;
 const HISTORY_LIMIT = 40; // most recent messages sent to the model as context
-
-/**
- * How long a conversation stays claimed if a turn never releases it (a crashed server).
- * Longer than any real turn; a normal turn always releases it in `finally`.
- */
-const LEASE = sql`now() + interval '10 minutes'`;
-
-/** Releases a conversation's lease and marks it as just updated. */
-async function releaseConversation(conversationId: string) {
-  await db
-    .update(conversations)
-    .set({ busyUntil: null, updatedAt: new Date() })
-    .where(eq(conversations.id, conversationId));
-}
 
 const jsonError = (error: string, status: number) => Response.json({ error }, { status });
 
@@ -61,27 +52,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // requests can't both win.
   let conversationId: string;
   if (requestedConversation) {
-    if (!UUID_PATTERN.test(requestedConversation)) return jsonError("Conversation not found.", 404);
-    const owned = and(
-      eq(conversations.id, requestedConversation),
-      eq(conversations.agentId, agent.id),
-      eq(conversations.userId, user.id),
-    );
-    const [claimed] = await db
-      .update(conversations)
-      .set({ busyUntil: LEASE })
-      .where(and(owned, or(isNull(conversations.busyUntil), lt(conversations.busyUntil, sql`now()`))))
-      .returning({ id: conversations.id });
-    if (!claimed) {
-      const [exists] = await db.select({ id: conversations.id }).from(conversations).where(owned).limit(1);
-      if (!exists) return jsonError("Conversation not found.", 404);
+    const claim = await claimConversation(requestedConversation, user.id, agent.id);
+    if (claim === "missing") return jsonError("Conversation not found.", 404);
+    if (claim === "busy") {
       return jsonError("This chat is still answering your previous message. Wait for it to finish, then send again.", 409);
     }
-    conversationId = claimed.id;
+    conversationId = requestedConversation;
   } else {
     const [created] = await db
       .insert(conversations)
-      .values({ agentId: agent.id, userId: user.id, title: text.slice(0, 60), busyUntil: LEASE })
+      .values({
+        agentId: agent.id,
+        userId: user.id,
+        title: text.slice(0, 60),
+        busyUntil: CONVERSATION_LEASE,
+      })
       .returning({ id: conversations.id });
     conversationId = created.id;
   }

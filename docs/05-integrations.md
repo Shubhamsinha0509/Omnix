@@ -21,7 +21,7 @@ How agents get access to Gmail, Slack, Notion, Jira and more.
 
 ## Approach — MCP-first (**Proposed**, decision D17)
 
-1. **Gmail built in-house (Phase 3).** It's the flagship use case; building it end to end teaches us the whole flow (OAuth, encrypted tokens, refresh, tools, approvals) and gives us full control over the riskiest action, sending email.
+1. **Gmail built in-house (Phase 3 — built).** It's the flagship use case; building it end to end teaches us the whole flow (OAuth, encrypted tokens, refresh, tools, approvals) and gives us full control over the riskiest action, sending email.
 2. **Everything else through remote MCP servers (Phase 5).** Omnix's agent runner acts as an **MCP client**. For each supported app we use its official (or vetted) **remote MCP server over HTTP**; the user connects it once via the server's OAuth flow and its tools become available to their agents.
 3. **Fallback** for apps without a good MCP server: build the integration ourselves, or use an integration platform for just those apps. (**Open** — see [open questions](10-open-questions.md#integrations).)
 
@@ -50,9 +50,27 @@ Step one of Phase 5: confirm Slack, Notion and Jira have usable official remote 
 
 ## Provider notes
 
-### Gmail
+### Gmail — **built** (Phase 3)
 
-- Use the Gmail API with the narrowest scopes possible. Reading mail needs `gmail.readonly` (or `gmail.modify` to label/archive); sending needs `gmail.send`.
+`lib/integrations/google.ts` (OAuth), `lib/integrations/gmail.ts` (the API),
+`lib/tools/gmail.ts` (the four tools), `app/api/connections/gmail/` (connect and callback).
+
+- **Scopes asked for:** `gmail.readonly` and `gmail.compose`, and nothing else.
+  `gmail.compose` covers drafts *and* sending, so no separate `gmail.send` is needed, and
+  `gmail.modify` is not asked for while labelling and archiving aren't tools. Google lets
+  people untick a box, so each tool checks the scopes it needs at call time and says what
+  to reconnect rather than failing with a 403.
+- **Written over `fetch`, not `googleapis`:** four endpoints don't justify the dependency,
+  and the parts that need care — real-world MIME, and building an outgoing message without
+  letting the model inject headers — are ours either way
+  ([security](07-security.md#sending-email-the-model-composed)).
+- **Reading:** `gmail.search` takes Gmail's own query syntax (`is:unread newer_than:2d`),
+  which the model is taught in the tool description. Gmail's list endpoint returns ids
+  only, so each hit costs a second request for its headers — hence a result cap and a
+  little parallelism. `gmail.read` walks the MIME tree, prefers `text/plain`, flattens
+  HTML where there is no plain part, and lists attachments without downloading them.
+- Both read tools are marked `untrustedOutput`: email is the most likely place an
+  instruction aimed at the agent is hiding.
 - These are Google **restricted scopes**: fine for up to 100 test users in development, but public launch requires Google OAuth app verification **and an annual third-party security assessment (CASA)** — costs money and takes weeks. Plan it early. See [security](07-security.md#google-verification).
 - "New email" events: Gmail push notifications via Google Cloud Pub/Sub → our webhook → Inngest event.
 - Note: this is a **separate** OAuth flow from "Sign in with Google". Signing in proves who the user is; connecting Gmail grants the agent access to their mailbox.
@@ -72,8 +90,17 @@ Step one of Phase 5: confirm Slack, Notion and Jira have usable official remote 
 
 Notes for Slack, Notion and Jira above describe their direct APIs — relevant for events/webhooks and for the fallback. With MCP-first, their tools come from each app's MCP server.
 
-## Connections UI
+## Connections UI — **built** (Phase 3)
 
-- **Connections page:** list connected accounts, status (active / needs reconnect), connect / disconnect.
-- **Agent settings → Tools:** choose which tools this agent may use and with which connection; per-tool "require approval" switch.
-- Disconnecting revokes the token with the provider and disables dependent tools.
+- **Connections page** (`/workspace/connections`): connected accounts with their status
+  (active / expired / reconnect needed) and what each one may do, plus what is available to
+  connect. Connecting is a plain link to a GET that redirects.
+- **Agent settings → Tools:** every tool, grouped by where it comes from, with a switch
+  per tool; an account picker when the user has more than one of that provider; and an
+  "Ask me before this runs" switch on `write` tools only. Each control saves on change.
+  A tool whose provider has no connected account is shown but disabled, with a link.
+- Disconnecting revokes the grant with Google, deletes the row, and leaves dependent tools
+  reading "needs an account" rather than quietly disappearing.
+
+Connecting an account gives **no agent** access on its own — that is a second, per-agent
+step, which is what makes least privilege real rather than aspirational.

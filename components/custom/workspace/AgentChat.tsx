@@ -11,25 +11,34 @@ import {
   Globe,
   History,
   Loader2,
+  Mail,
   Search,
   Settings,
+  ShieldCheck,
   SquarePen,
   Square,
   TriangleAlert,
   Wrench,
+  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Trace, TraceDescription, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
-import { createEventParser, type Activity } from "@/lib/agent/events";
+import {
+  createEventParser,
+  type Activity,
+  type ApprovalDecision,
+  type ApprovalRequest,
+} from "@/lib/agent/events";
 import type { ConversationSummary } from "@/lib/agents";
 import { AgentAvatar } from "./AgentAvatar";
 import { Markdown } from "./Markdown";
@@ -44,6 +53,12 @@ export type ChatMessage = {
   notes?: string[];
   /** True only while this reply is still streaming. */
   pending?: boolean;
+  /**
+   * An action the agent wants to take that needs the user's agreement. Unlike activity,
+   * this one survives a reload — it lives in the `approvals` table until it is decided.
+   */
+  approval?: ApprovalRequest;
+  approvalState?: "pending" | "deciding" | ApprovalDecision;
 };
 
 /** A tool's icon in the activity list. Anything new falls back to a spanner. */
@@ -51,6 +66,10 @@ const TOOL_ICONS: Record<string, typeof Wrench> = {
   "web.search": Search,
   "web.fetch": Globe,
   "time.now": Clock,
+  "gmail.search": Mail,
+  "gmail.read": Mail,
+  "gmail.create_draft": Mail,
+  "gmail.send": Mail,
 };
 
 type Props = {
@@ -58,19 +77,43 @@ type Props = {
   conversations: ConversationSummary[];
   initialConversationId: string | null;
   initialMessages: ChatMessage[];
+  /** Cards still waiting in this conversation, so a reload doesn't lose them. */
+  initialApprovals: ApprovalRequest[];
   aiReady: boolean;
 };
+
+/**
+ * Turns the saved history plus any undecided approvals into what the chat shows.
+ *
+ * A pending card arrives as its own entry rather than being folded into the last reply:
+ * the reply was saved, the card wasn't part of it, and keeping them separate means the
+ * conversation reads in the order it actually happened.
+ */
+function withApprovals(messages: ChatMessage[], approvals: ApprovalRequest[]): ChatMessage[] {
+  if (approvals.length === 0) return messages;
+  return [
+    ...messages,
+    ...approvals.map((approval) => ({
+      id: `approval-${approval.id}`,
+      role: "assistant" as const,
+      content: "",
+      approval,
+      approvalState: "pending" as const,
+    })),
+  ];
+}
 
 export default function AgentChat({
   agent,
   conversations,
   initialConversationId,
   initialMessages,
+  initialApprovals,
   aiReady,
 }: Props) {
   const router = useRouter();
   const [conversationId, setConversationId] = useState(initialConversationId);
-  const [chat, setChat] = useState<ChatMessage[]>(initialMessages);
+  const [chat, setChat] = useState<ChatMessage[]>(() => withApprovals(initialMessages, initialApprovals));
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -91,7 +134,7 @@ export default function AgentChat({
     setShownFor(initialConversationId);
     if (initialConversationId !== conversationId) {
       setConversationId(initialConversationId);
-      setChat(initialMessages);
+      setChat(withApprovals(initialMessages, initialApprovals));
       setError(null);
       setIsStreaming(false);
       setResets((count) => count + 1);
@@ -132,7 +175,7 @@ export default function AgentChat({
       abortRef.current = null;
       setIsStreaming(false);
       setConversationId(id);
-      setChat(initialMessages);
+      setChat(withApprovals(initialMessages, initialApprovals));
       setError(null);
     }
   };
@@ -147,6 +190,58 @@ export default function AgentChat({
     setError(null);
     syncUrl(null);
   };
+
+  const patch = (id: string, change: (message: ChatMessage) => ChatMessage) =>
+    setChat((prev) => prev.map((message) => (message.id === id ? change(message) : message)));
+
+  /**
+   * Reads one NDJSON run stream into a reply bubble (decision D23).
+   *
+   * Shared by sending a message and deciding an approval, because after a decision the
+   * agent carries on exactly as it would mid-turn — same events, same rendering.
+   */
+  const streamInto = async (body: ReadableStream<Uint8Array>, replyId: string) => {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    const parse = createEventParser();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      for (const event of parse(decoder.decode(value, { stream: true }))) {
+        if (event.t === "text") {
+          patch(replyId, (m) => ({ ...m, content: m.content + event.v }));
+        } else if (event.t === "note") {
+          patch(replyId, (m) => ({ ...m, notes: [...(m.notes ?? []), event.v] }));
+        } else if (event.t === "approval") {
+          patch(replyId, (m) => ({ ...m, approval: event.v, approvalState: "pending" }));
+        } else {
+          // Activities arrive twice: once running, once finished. Update in place.
+          patch(replyId, (m) => {
+            const activity = m.activity ?? [];
+            const at = activity.findIndex((item) => item.id === event.id);
+            const next: Activity = {
+              id: event.id,
+              tool: event.tool,
+              label: event.label,
+              status: event.status,
+              detail: event.detail,
+            };
+            return { ...m, activity: at === -1 ? [...activity, next] : activity.with(at, next) };
+          });
+        }
+      }
+    }
+  };
+
+  /** Drops a reply bubble that never received anything, so a decision can't leave a blank. */
+  const dropIfEmpty = (replyId: string) =>
+    setChat((prev) =>
+      prev.filter(
+        (m) => m.id !== replyId || m.content || m.activity?.length || m.notes?.length || m.approval,
+      ),
+    );
 
   const send = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -164,9 +259,6 @@ export default function AgentChat({
       { id: crypto.randomUUID(), role: "user", content: text },
       { id: replyId, role: "assistant", content: "", pending: true },
     ]);
-
-    const updateReply = (change: (message: ChatMessage) => ChatMessage) =>
-      setChat((prev) => prev.map((m) => (m.id === replyId ? change(m) : m)));
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -198,37 +290,7 @@ export default function AgentChat({
         syncUrl(newId);
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      const parse = createEventParser();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const event of parse(decoder.decode(value, { stream: true }))) {
-          if (event.t === "text") {
-            updateReply((m) => ({ ...m, content: m.content + event.v }));
-          } else if (event.t === "note") {
-            updateReply((m) => ({ ...m, notes: [...(m.notes ?? []), event.v] }));
-          } else {
-            // Activities arrive twice: once running, once finished. Update in place.
-            updateReply((m) => {
-              const activity = m.activity ?? [];
-              const at = activity.findIndex((item) => item.id === event.id);
-              const next: Activity = {
-                id: event.id,
-                tool: event.tool,
-                label: event.label,
-                status: event.status,
-                detail: event.detail,
-              };
-              return {
-                ...m,
-                activity: at === -1 ? [...activity, next] : activity.with(at, next),
-              };
-            });
-          }
-        }
-      }
+      await streamInto(res.body, replyId);
     } catch (err) {
       if ((err as Error).name !== "AbortError" && owns()) {
         setError((err as Error).message);
@@ -238,12 +300,74 @@ export default function AgentChat({
       }
     } finally {
       // The reply is finished either way, so it stops showing "Thinking...".
-      updateReply((m) => ({ ...m, pending: false }));
+      patch(replyId, (m) => ({ ...m, pending: false }));
       if (owns()) {
         setIsStreaming(false);
         abortRef.current = null;
         // Pick up the new chat's title in the history menu — only if the user is still on it.
         if (startedNewChat) router.refresh();
+      }
+    }
+  };
+
+  /**
+   * Approves or rejects one card, then streams whatever the agent says next.
+   *
+   * The card is marked `deciding` first so a second click does nothing, and the server
+   * claims the decision as well — the two together are why an email can't go out twice.
+   */
+  const decide = async (card: ChatMessage, decision: "approve" | "reject") => {
+    const approval = card.approval;
+    if (!approval || isStreaming || card.approvalState !== "pending") return;
+
+    const replyId = crypto.randomUUID();
+    const ticket = ++requestRef.current;
+    const owns = () => requestRef.current === ticket;
+
+    patch(card.id, (m) => ({ ...m, approvalState: "deciding" }));
+    setError(null);
+    setIsStreaming(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch(`/api/approvals/${approval.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string; status?: ApprovalDecision }
+          | null;
+        // Decided in another tab: show what it actually became rather than re-offering it.
+        patch(card.id, (m) => ({ ...m, approvalState: data?.status ?? "pending" }));
+        throw new Error(data?.error ?? "Couldn't record that decision. Please try again.");
+      }
+
+      patch(card.id, (m) => ({
+        ...m,
+        approvalState: decision === "approve" ? "approved" : "rejected",
+      }));
+      setChat((prev) => [...prev, { id: replyId, role: "assistant", content: "", pending: true }]);
+
+      await streamInto(res.body, replyId);
+    } catch (err) {
+      if ((err as Error).name !== "AbortError" && owns()) setError((err as Error).message);
+      // The request never landed (or never answered), so the decision wasn't recorded.
+      // Offer the buttons again rather than leaving the card stuck on "Working...".
+      patch(card.id, (m) => (m.approvalState === "deciding" ? { ...m, approvalState: "pending" } : m));
+    } finally {
+      patch(replyId, (m) => ({ ...m, pending: false }));
+      dropIfEmpty(replyId);
+      if (owns()) {
+        setIsStreaming(false);
+        abortRef.current = null;
+        // The card is no longer pending on the server, so the page's props should agree.
+        router.refresh();
       }
     }
   };
@@ -276,23 +400,26 @@ export default function AgentChat({
               }
             />
             <DropdownMenuContent align="end" className="w-72 min-w-72">
-              <DropdownMenuLabel>Past chats</DropdownMenuLabel>
-              {conversations.map((chatItem) => (
-                <DropdownMenuItem
-                  key={chatItem.id}
-                  render={<Link href={`/workspace/agent/${agent.id}?c=${chatItem.id}`} />}
-                  onClick={() => openChat(chatItem.id)}
-                >
-                  <span className="min-w-0 flex-1 truncate">{chatItem.title}</span>
-                  {chatItem.id === conversationId ? (
-                    <Check className="text-muted-foreground" />
-                  ) : (
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(chatItem.updatedAt), { addSuffix: true })}
-                    </span>
-                  )}
-                </DropdownMenuItem>
-              ))}
+              {/* Base UI requires a menu label to sit inside a group. */}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Past chats</DropdownMenuLabel>
+                {conversations.map((chatItem) => (
+                  <DropdownMenuItem
+                    key={chatItem.id}
+                    render={<Link href={`/workspace/agent/${agent.id}?c=${chatItem.id}`} />}
+                    onClick={() => openChat(chatItem.id)}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{chatItem.title}</span>
+                    {chatItem.id === conversationId ? (
+                      <Check className="text-muted-foreground" />
+                    ) : (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(chatItem.updatedAt), { addSuffix: true })}
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -306,6 +433,8 @@ export default function AgentChat({
           variant="ghost"
           size="icon"
           aria-label="Agent settings"
+          // Rendered as a link, not a <button>: tell Base UI so it doesn't add button semantics.
+          nativeButton={false}
           render={<Link href={`/workspace/agent/${agent.id}/settings`} />}
         >
           <Settings />
@@ -370,7 +499,8 @@ export default function AgentChat({
                     <Markdown content={message.content} />
                   ) : (
                     message.pending &&
-                    !message.activity?.length && (
+                    !message.activity?.length &&
+                    !message.approval && (
                       <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="size-4 animate-spin" />
                         Thinking...
@@ -383,6 +513,15 @@ export default function AgentChat({
                       {note}
                     </p>
                   ))}
+
+                  {message.approval && (
+                    <ApprovalCard
+                      request={message.approval}
+                      state={message.approvalState ?? "pending"}
+                      busy={isStreaming}
+                      onDecide={(decision) => void decide(message, decision)}
+                    />
+                  )}
                 </div>
               </div>
             ),
@@ -438,6 +577,94 @@ export default function AgentChat({
             Enter to send · Shift + Enter for a new line
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+type CardProps = {
+  request: ApprovalRequest;
+  state: "pending" | "deciding" | ApprovalDecision;
+  /** True while anything else in the chat is streaming, so one turn runs at a time. */
+  busy: boolean;
+  onDecide: (decision: "approve" | "reject") => void;
+};
+
+/**
+ * The approval card: what the agent is about to do, in the agent's own data rather than
+ * its own words.
+ *
+ * The values here come from the stored action, so what is shown is what will run. That is
+ * the whole point — an agent reading a stranger's email can be talked into sending one,
+ * and the only reliable defence is a person seeing the real recipient and the real body
+ * before it goes (docs/07-security.md).
+ */
+function ApprovalCard({ request, state, busy, onDecide }: CardProps) {
+  const pending = state === "pending" || state === "deciding";
+  const deciding = state === "deciding";
+
+  return (
+    <div className="mt-3 overflow-hidden rounded-xl border border-amber-500/40 bg-amber-500/5">
+      <div className="flex items-center gap-2 border-b border-amber-500/30 px-4 py-2.5">
+        <ShieldCheck className="size-4 shrink-0 text-amber-700 dark:text-amber-400" />
+        <span className="min-w-0 flex-1 text-sm font-medium">{request.summary}</span>
+        {pending && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            expires {formatDistanceToNow(new Date(request.expiresAt), { addSuffix: true })}
+          </span>
+        )}
+      </div>
+
+      <dl className="divide-y divide-amber-500/20 px-4 py-1 text-sm">
+        {request.details.map((detail) => (
+          <div key={detail.label} className="flex gap-3 py-2">
+            <dt className="w-20 shrink-0 text-muted-foreground">{detail.label}</dt>
+            <dd className="min-w-0 flex-1 break-words whitespace-pre-wrap">
+              {detail.value || <span className="text-muted-foreground">(empty)</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-amber-500/30 px-4 py-3">
+        {pending ? (
+          <>
+            <Button size="sm" disabled={busy || deciding} onClick={() => onDecide("approve")}>
+              {deciding ? <Loader2 className="animate-spin" /> : <Check />}
+              {deciding ? "Working..." : "Approve"}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy || deciding}
+              onClick={() => onDecide("reject")}
+            >
+              <X />
+              Reject
+            </Button>
+            {!request.resumable && (
+              <span className="text-xs text-muted-foreground">
+                The agent won&apos;t carry on afterwards — this turn was too large to keep.
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            {state === "approved" ? (
+              <>
+                <Check className="size-4" /> Approved — this was carried out.
+              </>
+            ) : state === "rejected" ? (
+              <>
+                <X className="size-4" /> Rejected — nothing happened.
+              </>
+            ) : (
+              <>
+                <Clock className="size-4" /> Expired without a decision, so nothing happened.
+              </>
+            )}
+          </span>
+        )}
       </div>
     </div>
   );

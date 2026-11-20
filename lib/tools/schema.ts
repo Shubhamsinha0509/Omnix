@@ -1,7 +1,7 @@
 import type { JsonSchema, PropertySchema } from "./types";
 
 /**
- * Checks the arguments Gemini sent against a tool's schema before the tool runs.
+ * Checks the arguments the model sent against a tool's schema before the tool runs.
  *
  * Models do get arguments wrong — a missing field, a string where a number belongs,
  * an invented property. Catching it here turns a crash into a message the model can

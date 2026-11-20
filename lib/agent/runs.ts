@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, max } from "drizzle-orm";
 
 import { db, runSteps, runs, type NewRun, type RunStep } from "@/db";
 
@@ -27,14 +27,36 @@ type StepInput = {
   payload: Record<string, unknown>;
 };
 
+/** Writes one step and returns its id, which an approval needs to point back at it. */
 export async function logStep({ runId, seq, type, tool, payload }: StepInput) {
-  await db.insert(runSteps).values({
-    runId,
-    seq,
-    type,
-    tool: tool ?? null,
-    payload: redact(payload),
-  });
+  const [step] = await db
+    .insert(runSteps)
+    .values({
+      runId,
+      seq,
+      type,
+      tool: tool ?? null,
+      payload: redact(payload),
+    })
+    .returning({ id: runSteps.id });
+  return step.id;
+}
+
+/**
+ * The next step number for a run that is being picked up again after an approval.
+ * Without it a resumed turn would restart at 0 and the timeline would read out of order.
+ */
+export async function nextSeq(runId: string) {
+  const [row] = await db.select({ highest: max(runSteps.seq) }).from(runSteps).where(eq(runSteps.runId, runId));
+  return (row?.highest ?? -1) + 1;
+}
+
+/** Parks a run while an approval is pending. It is finished later, by the resumed turn. */
+export async function pauseRunForApproval(runId: string, inputTokens: number, outputTokens: number) {
+  await db
+    .update(runs)
+    .set({ status: "waiting_approval", inputTokens, outputTokens })
+    .where(eq(runs.id, runId));
 }
 
 type FinishRun = {

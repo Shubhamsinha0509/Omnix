@@ -1,9 +1,10 @@
 import type { Agent, User } from "@/db";
+import type { ToolAuth } from "@/lib/integrations/access";
 
 /**
- * The subset of JSON Schema a tool may use for its parameters. Gemini receives this
- * as `parametersJsonSchema`, and `validateArgs` checks the model's arguments against it
- * before the tool runs.
+ * The subset of JSON Schema a tool may use for its parameters. It travels to the model
+ * as a function tool's `parameters`, and `validateArgs` checks the arguments that come
+ * back against it before the tool runs.
  */
 export type JsonSchema = {
   type: "object";
@@ -24,8 +25,20 @@ export type PropertySchema = {
   maxItems?: number;
 };
 
-/** How much damage a tool can do. Drives the approval rules (Phase 3). */
+/**
+ * How much damage a tool can do, and with it whether the user is asked first:
+ * `read` never asks, `write` asks unless the user has trusted that tool on that agent,
+ * and `destructive` always asks whatever the setting says (decision D29).
+ */
 export type ToolRisk = "read" | "write" | "destructive";
+
+/** What an approval card says. The values are the real ones, not the agent's account of them. */
+export type ApprovalSummary = {
+  /** One line, in plain English: "Send an email to anna@client.com". */
+  summary: string;
+  /** The action itself, field by field — recipient, subject, body. */
+  details?: { label: string; value: string }[];
+};
 
 /** Everything a tool is allowed to know about the run it's part of. */
 export type ToolContext = {
@@ -36,6 +49,13 @@ export type ToolContext = {
   timezone: string;
   /** Aborted when the user stops the reply or the run is cancelled. */
   signal: AbortSignal;
+  /**
+   * The connected account this call is bound to, for tools with a `provider`.
+   *
+   * Tokens are decrypted inside it at the moment a request is made and never reach the
+   * model (docs/07-security.md#secrets). Null for tools that need no account.
+   */
+  auth: ToolAuth | null;
 };
 
 /** What a tool hands back to the model. `error` means the call failed but the run continues. */
@@ -43,7 +63,7 @@ export type ToolResult = { output: unknown } | { error: string };
 
 /**
  * A tool the agent can call. Defined once here and used by every trigger (chat, task).
- * Native tools are the exception: Gemini runs them itself, so they have no `execute`.
+ * Native tools are the exception: the provider runs them itself, so they have no `execute`.
  */
 export type ToolDefinition = {
   /** Stable key, e.g. "web.fetch". Also what `agent_tools` will store in Phase 3. */
@@ -63,6 +83,12 @@ export type ToolDefinition = {
    * The runner labels it as untrusted data so the model doesn't follow instructions in it.
    */
   untrustedOutput?: boolean;
+  /**
+   * Describes exactly what a call would do, for the approval card. Every tool that can
+   * need approval has one: a card reading "the agent wants to use gmail.send" tells the
+   * user nothing they can actually judge.
+   */
+  summarise?(args: Record<string, unknown>): ApprovalSummary;
   execute(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolResult>;
 };
 

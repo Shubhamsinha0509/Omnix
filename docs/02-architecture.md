@@ -75,7 +75,7 @@ Rule of thumb: anything that might take longer than ~60 seconds, or needs to sur
 | UI | React 19, Tailwind CSS v4, shadcn/ui (`base-nova` style, Base UI primitives), Lucide icons |
 | Auth | next-auth 4 (JWT) |
 | DB | Neon Postgres, Drizzle ORM 0.45, `postgres` driver |
-| AI | OpenRouter via the `openai` SDK, model `deepseek/deepseek-chat-v3.1` (set in `lib/ai.ts`) |
+| AI | OpenRouter via the `openai` SDK, model `nvidia/nemotron-3-ultra-550b-a55b:free` for testing (D38; set in `lib/ai.ts`) |
 | Jobs | Inngest 3 |
 | Avatars | DiceBear `clay` style (by seed) |
 | Markdown | `react-markdown` + `remark-gfm`; code blocks highlighted by `shiki` |
@@ -119,6 +119,9 @@ lib/
     schema.ts                      validates the model's arguments
     time.ts, web.ts                the Phase 2 tools
   inngest/                         Inngest client + functions
+  crypto.ts                        token encryption (AES-256-GCM)
+  integrations/
+    connections.ts                 the only way tokens are read or written
   -- planned --
   integrations/gmail/              Gmail OAuth + API client
   mcp/                             MCP client, server allow-list, per-user OAuth
@@ -126,7 +129,7 @@ lib/
   crypto.ts                        token encryption
 db/
   schema.ts                        Drizzle schema (users, agents, conversations,
-                                   messages, runs, run_steps)
+                                   messages, runs, run_steps, connections)
 components/custom/workspace/       app components (sidebar, chat, agent form, Markdown)
 docs/                              this plan
 ```

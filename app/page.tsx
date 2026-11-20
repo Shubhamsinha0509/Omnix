@@ -1,462 +1,220 @@
-import React from 'react';
-import Link from 'next/link';
+import type { CSSProperties } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { CalendarDays, Mail, MessageSquare, NotebookText, SquareKanban } from "lucide-react";
 
-export default function Home() {
+import { agentAvatarUrl } from "@/components/custom/workspace/AgentAvatar";
+
+/** Where "Launch App" goes: the workspace, which sends signed-out visitors to sign in. */
+const APP_HREF = "/workspace";
+
+const NAV = [
+  { label: "Features", href: "#features" },
+  { label: "How it works", href: "#how-it-works" },
+  { label: "Integrations", href: "#integrations" },
+  { label: "Docs", href: "#docs" },
+];
+
+/** The apps agents connect to (docs/05-integrations.md). Generic icons, not brand marks. */
+const INTEGRATIONS = [
+  { name: "Gmail", icon: Mail },
+  { name: "Slack", icon: MessageSquare },
+  { name: "Notion", icon: NotebookText },
+  { name: "Jira", icon: SquareKanban },
+  { name: "Calendar", icon: CalendarDays },
+];
+
+/** The indigo pill button from the theme: soft glow underneath, light edge on top. */
+function LaunchButton({ size = "md" }: { size?: "sm" | "md" }) {
   return (
-    <div>
-      <h2>Hello World</h2>
+    <Link
+      href={APP_HREF}
+      className={[
+        "inline-flex items-center justify-center rounded-xl font-medium text-white",
+        "bg-gradient-to-b from-[#8b8cf9] to-[#6366f1]",
+        "shadow-[0_10px_24px_-6px_rgba(99,102,241,0.65),inset_0_1px_0_rgba(255,255,255,0.35)]",
+        "transition hover:brightness-105 hover:shadow-[0_14px_30px_-6px_rgba(99,102,241,0.75),inset_0_1px_0_rgba(255,255,255,0.35)]",
+        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300/60",
+        size === "sm" ? "h-9 px-4 text-sm" : "h-11 px-7 text-[15px]",
+      ].join(" ")}
+    >
+      Launch App
+    </Link>
+  );
+}
+
+/** A soft glass bubble floating in the sky. */
+function Bubble({ className, delay = "0s" }: { className: string; delay?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={`omnix-motion absolute rounded-full ${className}`}
+      style={{
+        background:
+          "radial-gradient(circle at 32% 28%, rgba(255,255,255,0.95), rgba(255,255,255,0.35) 38%, rgba(196,190,255,0.35) 70%, rgba(170,180,255,0.15))",
+        boxShadow: "inset -6px -10px 24px rgba(150,140,255,0.25), 0 10px 30px rgba(140,150,220,0.15)",
+        animation: `omnix-float 9s ease-in-out ${delay} infinite`,
+      }}
+    />
+  );
+}
+
+/** A soft cloud made of blurred blobs. */
+function Cloud({ className, tone = "white" }: { className: string; tone?: "white" | "peach" }) {
+  const color = tone === "peach" ? "bg-[#fbc7ae]" : "bg-white";
+  return (
+    <div aria-hidden className={`omnix-motion pointer-events-none absolute ${className}`} style={{ animation: "omnix-drift 22s ease-in-out infinite" }}>
+      <div className={`absolute left-0 top-6 h-24 w-48 rounded-full ${color} opacity-80 blur-2xl`} />
+      <div className={`absolute left-16 top-0 h-32 w-40 rounded-full ${color} opacity-90 blur-2xl`} />
+      <div className={`absolute left-32 top-8 h-24 w-44 rounded-full ${color} opacity-80 blur-2xl`} />
     </div>
   );
 }
 
+/** One of the user's agents, floating on the hills (the DiceBear clay style used in the app). */
+function FloatingAgent({ seed, className, tilt, delay }: { seed: string; className: string; tilt: string; delay: string }) {
+  return (
+    <div
+      aria-hidden
+      className={`omnix-motion absolute ${className}`}
+      style={{ "--tilt": tilt, animation: `omnix-float 6s ease-in-out ${delay} infinite` } as CSSProperties}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- DiceBear serves SVG */}
+      <img
+        // Transparent background: in the app avatars sit in circles, here they float freely.
+        // DiceBear 10 only accepts hex here, so "transparent" is 8-digit hex with zero alpha.
+        src={`${agentAvatarUrl(seed)}&backgroundColor=00000000`}
+        alt=""
+        draggable={false}
+        className="size-full drop-shadow-[0_24px_30px_rgba(99,102,241,0.25)]"
+      />
+      {/* soft shadow on the snow */}
+      <div className="mx-auto -mt-2 h-4 w-2/3 rounded-full bg-indigo-900/10 blur-md" />
+    </div>
+  );
+}
 
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    minHeight: '100vh',
-    backgroundColor: '#09090b',
-    color: '#fafafa',
-    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-    position: 'relative',
-    overflowX: 'hidden',
-  },
-  glowTopLeft: {
-    position: 'absolute',
-    top: '-150px',
-    left: '-150px',
-    width: '500px',
-    height: '500px',
-    background: 'radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, transparent 70%)',
-    pointerEvents: 'none',
-  },
-  glowTopRight: {
-    position: 'absolute',
-    top: '-150px',
-    right: '-150px',
-    width: '500px',
-    height: '500px',
-    background: 'radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%)',
-    pointerEvents: 'none',
-  },
-  navbar: {
-    position: 'sticky',
-    top: 0,
-    zIndex: 50,
-    backdropFilter: 'blur(12px)',
-    backgroundColor: 'rgba(9, 9, 11, 0.8)',
-    borderBottom: '1px solid rgba(39, 39, 42, 0.8)',
-  },
-  navContainer: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '1rem 1.5rem',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  brand: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.6rem',
-    textDecoration: 'none',
-    color: '#fafafa',
-  },
-  brandIcon: {
-    width: '32px',
-    height: '32px',
-    borderRadius: '8px',
-    background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1rem',
-    fontWeight: 700,
-  },
-  brandText: {
-    fontSize: '1.2rem',
-    fontWeight: 800,
-    letterSpacing: '-0.02em',
-  },
-  brandVersion: {
-    fontSize: '0.7rem',
-    fontWeight: 600,
-    padding: '0.15rem 0.45rem',
-    borderRadius: '9999px',
-    backgroundColor: '#27272a',
-    color: '#38bdf8',
-    border: '1px solid #3f3f46',
-  },
-  navLinks: {
-    display: 'flex',
-    gap: '1.75rem',
-    alignItems: 'center',
-  },
-  navLink: {
-    color: '#a1a1aa',
-    textDecoration: 'none',
-    fontSize: '0.9rem',
-    fontWeight: 500,
-    transition: 'color 0.2s',
-  },
-  navAuth: {
-    display: 'flex',
-    gap: '0.75rem',
-    alignItems: 'center',
-  },
-  signInBtn: {
-    color: '#fafafa',
-    textDecoration: 'none',
-    fontSize: '0.875rem',
-    fontWeight: 500,
-    padding: '0.5rem 1rem',
-    borderRadius: '8px',
-    transition: 'background-color 0.2s',
-  },
-  getStartedNavBtn: {
-    backgroundColor: '#38bdf8',
-    color: '#09090b',
-    textDecoration: 'none',
-    fontSize: '0.875rem',
-    fontWeight: 600,
-    padding: '0.5rem 1rem',
-    borderRadius: '8px',
-    transition: 'opacity 0.2s',
-  },
-  heroSection: {
-    maxWidth: '1000px',
-    margin: '0 auto',
-    padding: '5rem 1.5rem 4rem 1.5rem',
-    textAlign: 'center',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-  },
-  heroBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '0.4rem 1rem',
-    borderRadius: '9999px',
-    backgroundColor: 'rgba(39, 39, 42, 0.6)',
-    border: '1px solid #3f3f46',
-    fontSize: '0.825rem',
-    fontWeight: 500,
-    color: '#e4e4e7',
-    marginBottom: '2rem',
-  },
-  badgePulse: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    backgroundColor: '#38bdf8',
-    boxShadow: '0 0 8px #38bdf8',
-  },
-  heroTitle: {
-    fontSize: 'clamp(2.5rem, 5vw, 4.25rem)',
-    fontWeight: 800,
-    lineHeight: 1.15,
-    letterSpacing: '-0.035em',
-    margin: '0 0 1.5rem 0',
-  },
-  gradientText: {
-    background: 'linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-  },
-  heroSubtitle: {
-    fontSize: 'clamp(1rem, 2vw, 1.25rem)',
-    color: '#a1a1aa',
-    lineHeight: 1.6,
-    maxWidth: '720px',
-    margin: '0 0 2.5rem 0',
-  },
-  ctaGroup: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '1rem',
-    justifyContent: 'center',
-    marginBottom: '3.5rem',
-  },
-  primaryCta: {
-    padding: '0.85rem 2rem',
-    borderRadius: '10px',
-    background: 'linear-gradient(135deg, #38bdf8, #60a5fa)',
-    color: '#09090b',
-    fontWeight: 700,
-    fontSize: '1rem',
-    textDecoration: 'none',
-    boxShadow: '0 10px 25px -5px rgba(56, 189, 248, 0.4)',
-    transition: 'transform 0.2s, box-shadow 0.2s',
-  },
-  secondaryCta: {
-    padding: '0.85rem 2rem',
-    borderRadius: '10px',
-    backgroundColor: 'rgba(24, 24, 27, 0.8)',
-    border: '1px solid #3f3f46',
-    color: '#fafafa',
-    fontWeight: 600,
-    fontSize: '1rem',
-    textDecoration: 'none',
-    transition: 'background-color 0.2s, border-color 0.2s',
-  },
-  terminalBox: {
-    width: '100%',
-    maxWidth: '480px',
-    backgroundColor: '#18181b',
-    border: '1px solid #27272a',
-    borderRadius: '12px',
-    overflow: 'hidden',
-    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-    marginBottom: '4rem',
-  },
-  terminalHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '0.6rem 1rem',
-    backgroundColor: '#121214',
-    borderBottom: '1px solid #27272a',
-  },
-  dotRed: { width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#ef4444' },
-  dotYellow: { width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#eab308' },
-  dotGreen: { width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#22c55e' },
-  terminalTitle: { marginLeft: 'auto', fontSize: '0.75rem', color: '#71717a' },
-  terminalContent: {
-    padding: '1rem 1.25rem',
-    fontFamily: 'monospace',
-    fontSize: '0.925rem',
-    display: 'flex',
-    gap: '0.75rem',
-    alignItems: 'center',
-    textAlign: 'left',
-  },
-  terminalPrompt: { color: '#38bdf8', fontWeight: 700 },
-  terminalCommand: { color: '#e4e4e7' },
-  stackBanner: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '1rem',
-    width: '100%',
-  },
-  stackLabel: {
-    fontSize: '0.75rem',
-    fontWeight: 700,
-    letterSpacing: '0.1em',
-    color: '#71717a',
-  },
-  stackPills: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '0.6rem',
-    justifyContent: 'center',
-  },
-  stackPill: {
-    fontSize: '0.8rem',
-    fontWeight: 500,
-    color: '#a1a1aa',
-    backgroundColor: 'rgba(24, 24, 27, 0.7)',
-    border: '1px solid #27272a',
-    padding: '0.4rem 0.85rem',
-    borderRadius: '9999px',
-  },
-  featuresSection: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '5rem 1.5rem',
-  },
-  sectionHeader: {
-    textAlign: 'center',
-    maxWidth: '700px',
-    margin: '0 auto 3.5rem auto',
-  },
-  sectionBadge: {
-    fontSize: '0.75rem',
-    fontWeight: 700,
-    letterSpacing: '0.1em',
-    color: '#38bdf8',
-    marginBottom: '0.5rem',
-    display: 'block',
-  },
-  sectionTitle: {
-    fontSize: 'clamp(1.75rem, 3.5vw, 2.5rem)',
-    fontWeight: 800,
-    letterSpacing: '-0.025em',
-    margin: '0 0 1rem 0',
-  },
-  sectionSubtitle: {
-    fontSize: '1rem',
-    color: '#a1a1aa',
-    lineHeight: 1.6,
-    margin: 0,
-  },
-  featuresGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-    gap: '1.5rem',
-  },
-  featureCard: {
-    backgroundColor: '#18181b',
-    border: '1px solid #27272a',
-    borderRadius: '16px',
-    padding: '2rem',
-    display: 'flex',
-    flexDirection: 'column',
-    position: 'relative',
-    transition: 'border-color 0.2s, transform 0.2s',
-  },
-  featureIconBox: {
-    width: '48px',
-    height: '48px',
-    borderRadius: '12px',
-    backgroundColor: '#27272a',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1.5rem',
-    marginBottom: '1.25rem',
-  },
-  featureTitle: {
-    fontSize: '1.25rem',
-    fontWeight: 700,
-    margin: '0 0 0.75rem 0',
-    color: '#fafafa',
-  },
-  featureDescription: {
-    fontSize: '0.9rem',
-    color: '#a1a1aa',
-    lineHeight: 1.6,
-    margin: '0 0 1.5rem 0',
-  },
-  featureTag: {
-    marginTop: 'auto',
-    fontSize: '0.75rem',
-    fontWeight: 600,
-    color: '#38bdf8',
-    backgroundColor: 'rgba(56, 189, 248, 0.08)',
-    border: '1px solid rgba(56, 189, 248, 0.2)',
-    padding: '0.25rem 0.6rem',
-    borderRadius: '6px',
-    alignSelf: 'flex-start',
-  },
-  stepsSection: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '2rem 1.5rem 5rem 1.5rem',
-  },
-  stepsCard: {
-    backgroundColor: '#121215',
-    border: '1px solid #27272a',
-    borderRadius: '20px',
-    padding: '3rem 2rem',
-    textAlign: 'center',
-  },
-  stepsTitle: {
-    fontSize: '1.75rem',
-    fontWeight: 800,
-    marginBottom: '2.5rem',
-  },
-  stepsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-    gap: '2rem',
-    textAlign: 'left',
-  },
-  stepItem: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem',
-  },
-  stepNumber: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
-    backgroundColor: '#38bdf8',
-    color: '#09090b',
-    fontWeight: 800,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1.1rem',
-    marginBottom: '0.5rem',
-  },
-  stepHeading: {
-    fontSize: '1.15rem',
-    fontWeight: 700,
-    margin: 0,
-    color: '#fafafa',
-  },
-  stepText: {
-    fontSize: '0.875rem',
-    color: '#a1a1aa',
-    lineHeight: 1.5,
-    margin: 0,
-  },
-  ctaBannerSection: {
-    maxWidth: '1000px',
-    margin: '0 auto',
-    padding: '0 1.5rem 5rem 1.5rem',
-  },
-  ctaBanner: {
-    background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(168, 85, 247, 0.15) 100%)',
-    border: '1px solid rgba(56, 189, 248, 0.3)',
-    borderRadius: '20px',
-    padding: '3.5rem 2rem',
-    textAlign: 'center',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '1rem',
-  },
-  ctaBannerTitle: {
-    fontSize: 'clamp(1.75rem, 3vw, 2.25rem)',
-    fontWeight: 800,
-    margin: 0,
-  },
-  ctaBannerText: {
-    fontSize: '1rem',
-    color: '#a1a1aa',
-    maxWidth: '550px',
-    margin: 0,
-  },
-  ctaBannerButtons: {
-    marginTop: '1rem',
-  },
-  ctaBannerBtn: {
-    backgroundColor: '#38bdf8',
-    color: '#09090b',
-    fontWeight: 700,
-    fontSize: '1rem',
-    padding: '0.85rem 2rem',
-    borderRadius: '10px',
-    textDecoration: 'none',
-    boxShadow: '0 10px 20px -5px rgba(56, 189, 248, 0.4)',
-  },
-  footer: {
-    borderTop: '1px solid #27272a',
-    backgroundColor: '#09090b',
-    padding: '2.5rem 1.5rem',
-  },
-  footerContainer: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '1rem',
-    textAlign: 'center',
-  },
-  footerBrand: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  footerCopyright: {
-    fontSize: '0.875rem',
-    color: '#71717a',
-    margin: 0,
-  },
-  authorLink: {
-    color: '#a1a1aa',
-    textDecoration: 'underline',
-  },
-};
+/** Rolling snow hills around a pale lake, drawn in SVG so it scales to any width. */
+function Landscape() {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 1440 560"
+      preserveAspectRatio="xMidYMax slice"
+      className="absolute inset-x-0 bottom-0 h-[58%] w-full"
+    >
+      <defs>
+        <linearGradient id="hill-far" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f4f6fb" />
+          <stop offset="100%" stopColor="#dfe4f1" />
+        </linearGradient>
+        <linearGradient id="hill-near" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#e9ecf4" />
+        </linearGradient>
+        <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#bfe0f2" />
+          <stop offset="100%" stopColor="#e6f3fa" />
+        </linearGradient>
+        <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f7f8fb" stopOpacity="0" />
+          <stop offset="60%" stopColor="#f5f6f9" />
+          <stop offset="100%" stopColor="#f5f6f9" />
+        </linearGradient>
+      </defs>
+
+      {/* far hills */}
+      <path d="M0 210 C 160 90, 330 80, 470 190 C 560 120, 700 70, 860 150 C 980 70, 1180 60, 1300 170 C 1360 140, 1410 140, 1440 160 L1440 560 L0 560 Z" fill="url(#hill-far)" />
+      {/* lake */}
+      <path d="M430 330 C 560 300, 880 300, 1010 330 C 1060 350, 1000 410, 860 420 C 700 430, 560 425, 460 400 C 390 380, 380 345, 430 330 Z" fill="url(#lake)" opacity="0.9" />
+      {/* near hills, left and right, framing the lake */}
+      <path d="M0 260 C 140 180, 300 200, 420 300 C 470 345, 500 400, 470 460 L 0 560 Z" fill="url(#hill-near)" />
+      <path d="M1440 250 C 1300 170, 1140 190, 1030 290 C 970 345, 950 410, 990 470 L 1440 560 Z" fill="url(#hill-near)" />
+      {/* foreground snow fading into the page */}
+      <path d="M0 440 C 300 400, 520 470, 720 450 C 940 430, 1160 400, 1440 430 L1440 560 L0 560 Z" fill="#fbfbfd" />
+      <rect x="0" y="380" width="1440" height="180" fill="url(#ground)" />
+    </svg>
+  );
+}
+
+export default function Home() {
+  return (
+    <main className="min-h-svh bg-[#f5f6f9] text-[#1e1b4b]">
+      {/* ── Hero ─────────────────────────────────────────────── */}
+      <section className="relative isolate min-h-[100svh] overflow-hidden bg-gradient-to-b from-[#d3ddef] via-[#e6ecf6] to-[#f5f6f9]">
+        {/* sky */}
+        <Cloud className="left-[4%] top-[14%] h-40 w-72" />
+        <Cloud className="right-[6%] top-[8%] h-40 w-72" />
+        <Cloud className="left-[38%] top-[2%] h-32 w-72 opacity-70" />
+        <Bubble className="left-[10%] top-[44%] hidden size-24 sm:block" delay="0s" />
+        <Bubble className="right-[12%] top-[38%] size-7" delay="1.5s" />
+        <Bubble className="left-[54%] top-[58%] size-12" delay="3s" />
+        <Bubble className="right-[22%] top-[22%] size-4" delay="2s" />
+
+        {/* ground: hills, with peach mist drifting in front of their edges */}
+        <Landscape />
+        {/* On phones the mist would fill the whole width, so it only appears from `sm` up. */}
+        <Cloud className="-left-16 bottom-[20%] hidden h-40 w-72 opacity-70 sm:block" tone="peach" />
+        <Cloud className="-right-10 bottom-[24%] hidden h-40 w-72 opacity-70 sm:block" tone="peach" />
+
+        {/* agents */}
+        <FloatingAgent seed="omnix-scout" className="left-[4%] bottom-[20%] size-24 sm:left-[14%] sm:bottom-[16%] sm:size-48 lg:size-56" tilt="-8deg" delay="0s" />
+        <FloatingAgent seed="omnix-courier" className="right-[4%] bottom-[18%] size-20 sm:right-[12%] sm:bottom-[12%] sm:size-44 lg:size-52" tilt="10deg" delay="1.2s" />
+
+        {/* nav */}
+        <header className="absolute inset-x-0 top-5 z-20 px-4">
+          <nav className="mx-auto flex max-w-5xl items-center justify-between rounded-2xl border border-white/80 bg-white/55 px-4 py-3 shadow-[0_8px_30px_rgba(120,130,190,0.15)] backdrop-blur-xl">
+            <Link href="/" className="flex items-center gap-2.5">
+              <Image src="/logo.png" alt="" width={30} height={30} className="size-[30px]" loading="eager" />
+              <span className="text-lg font-semibold tracking-tight">Omnix</span>
+            </Link>
+            <ul className="hidden items-center gap-8 text-sm text-[#3b3a63] md:flex">
+              {NAV.map((item) => (
+                <li key={item.href}>
+                  <a href={item.href} className="transition hover:text-[#6366f1]">
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <LaunchButton size="sm" />
+          </nav>
+        </header>
+
+        {/* headline */}
+        <div className="relative z-10 mx-auto flex max-w-6xl flex-col items-center px-6 pt-32 text-center sm:pt-44">
+          {/* Two lines on wider screens, like the reference; free wrapping on phones. */}
+          <h1 className="text-[clamp(2.25rem,5.4vw,4.4rem)] font-semibold leading-[1.08] tracking-[-0.02em] text-balance text-[#1e1b4b]">
+            <span className="md:block md:whitespace-nowrap">Create, Connect &amp; Automate</span>{" "}
+            <span className="md:block md:whitespace-nowrap">AI Agents Instantly</span>
+          </h1>
+          <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-[#4a4870] sm:text-base">
+            Build personal AI agents, connect them to Gmail, Slack, Notion and Jira, and let them
+            work for you — on demand, on a schedule, or on their own virtual machine.
+          </p>
+          <div className="mt-9">
+            <LaunchButton />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Integrations strip ───────────────────────────────── */}
+      <section id="integrations" className="relative -mt-24 pb-24 text-center">
+        <p className="text-sm text-[#4a4870]">Works with the tools you already use</p>
+        <ul className="mt-5 flex flex-wrap items-center justify-center gap-4 px-4">
+          {INTEGRATIONS.map(({ name, icon: Icon }) => (
+            <li key={name}>
+              <div
+                title={name}
+                className="flex size-16 items-center justify-center rounded-2xl border border-white bg-white/80 text-[#8a8aa3] shadow-[0_6px_20px_rgba(120,130,190,0.12)] transition hover:-translate-y-0.5 hover:text-[#6366f1]"
+              >
+                <Icon className="size-7" strokeWidth={1.75} />
+                <span className="sr-only">{name}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </main>
+  );
+}

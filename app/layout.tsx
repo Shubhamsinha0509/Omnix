@@ -4,8 +4,9 @@ import type { Metadata } from "next";
 import { Figtree } from "next/font/google";
 
 export const metadata: Metadata = {
-  title: "Next.js Premium Startup Boilerplate",
-  description: "Created using the ultimate interactive Next.js stack generator CLI.",
+  title: "Omnix — AI agents that work for you",
+  description:
+    "Create AI agents, connect them to Gmail, Slack, Notion and Jira, and let them work on demand, on a schedule, or on their own virtual machine.",
 };
 
 const figtree = Figtree({ subsets: ["latin"] });

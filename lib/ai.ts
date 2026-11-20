@@ -3,11 +3,30 @@ import OpenAI from "openai";
 import type { Agent } from "@/db";
 
 /**
- * Model used for agent chat, as an OpenRouter model id. Change it here to switch every
- * agent at once; a per-agent override comes with the `model` column in a later phase.
- * Browse ids and prices at https://openrouter.ai/models.
+ * Used when `OPENROUTER_MODEL` isn't set. Free (D38) because the account has no credit;
+ * free providers may log prompts, and agents now read real email, so set
+ * `OPENROUTER_MODEL=deepseek/deepseek-chat-v3.1` (paid, D34) once there is credit.
  */
-export const CHAT_MODEL = "deepseek/deepseek-chat-v3.1";
+const DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
+
+/**
+ * Model used for agent chat, as an OpenRouter model id (e.g. "deepseek/deepseek-chat-v3.1").
+ * Set `OPENROUTER_MODEL` in .env to switch every agent at once — no code change, just a
+ * restart (D39). A per-agent override comes with the `model` column in a later phase.
+ * Browse ids and prices at https://openrouter.ai/models; the model must support tools.
+ */
+export const CHAT_MODEL = resolveModel(process.env.OPENROUTER_MODEL);
+
+/** An OpenRouter id always looks like "provider/model"; anything else falls back loudly. */
+function resolveModel(value: string | undefined) {
+  const id = value?.trim();
+  if (!id) return DEFAULT_MODEL;
+  if (!/^[\w.-]+\/[\w.:-]+$/.test(id)) {
+    console.warn(`OPENROUTER_MODEL "${id}" doesn't look like an OpenRouter model id; using ${DEFAULT_MODEL}.`);
+    return DEFAULT_MODEL;
+  }
+  return id;
+}
 
 /** OpenRouter speaks the OpenAI API, so the official SDK is the client (decision D26). */
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";

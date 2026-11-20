@@ -19,15 +19,22 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { deleteAgent, updateAgent } from "@/app/workspace/actions";
+import type { SafeConnection } from "@/lib/integrations/connections";
+import type { ToolSetting } from "@/lib/tools";
+import AgentTools from "./AgentTools";
 import { AgentFields, type AgentDraft } from "./AgentFields";
 
 type Props = {
   agent: { id: string; name: string; instructions: string; avatarSeed: string };
   /** How many conversations will be deleted with the agent. */
   conversationCount: number;
+  /** Every tool there is, with this agent's current choice for each. */
+  tools: ToolSetting[];
+  /** The user's connected accounts, so a tool can be pointed at one. */
+  connections: SafeConnection[];
 };
 
-export default function AgentSettings({ agent, conversationCount }: Props) {
+export default function AgentSettings({ agent, conversationCount, tools, connections }: Props) {
   const [draft, setDraft] = useState<AgentDraft>({
     name: agent.name,
     instructions: agent.instructions,
@@ -97,6 +104,10 @@ export default function AgentSettings({ agent, conversationCount }: Props) {
           </Button>
         </div>
       </form>
+
+      <Separator className="my-10" />
+
+      <AgentTools agentId={agent.id} tools={tools} connections={connections} />
 
       <Separator className="my-10" />
 

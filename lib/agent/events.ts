@@ -2,9 +2,11 @@
  * The wire format between the chat API route and the browser.
  *
  * Phase 1 streamed plain text. A reply can now also contain tool activity ("Searching
- * the web…"), so the stream carries one JSON object per line instead (decision D23).
- * Only `text` events are saved to the conversation — notes and activity are for this
- * turn only, so the model never sees them in its history.
+ * the web…") and a request for the user's approval, so the stream carries one JSON object
+ * per line instead (decision D23). Only `text` events are saved to the conversation —
+ * notes and activity are for this turn only, so the model never sees them in its history.
+ * An approval is the exception: it outlives the stream, in the `approvals` table, because
+ * the user may well come back to it tomorrow.
  */
 export type RunEvent =
   /** A piece of the agent's reply. */
@@ -12,7 +14,34 @@ export type RunEvent =
   /** A tool the agent is using, or has finished using. */
   | { t: "activity"; id: string; tool: string; label: string; status: ActivityStatus; detail?: string }
   /** Something the user should know that isn't part of the reply (an error, a limit hit). */
-  | { t: "note"; v: string };
+  | { t: "note"; v: string }
+  /** The agent wants to do something the user has to agree to first. The turn stops here. */
+  | { t: "approval"; v: ApprovalRequest };
+
+/**
+ * An action waiting for a decision, as the chat draws it.
+ *
+ * `details` holds the real values — the actual recipient, subject and body — because a
+ * card showing the agent's description of what it is about to do is no defence at all
+ * (docs/07-security.md).
+ */
+export type ApprovalRequest = {
+  id: string;
+  tool: string;
+  /** "Sending email" — the tool's own label, so the card matches the activity line. */
+  label: string;
+  summary: string;
+  details: { label: string; value: string }[];
+  expiresAt: string;
+  /**
+   * False when the paused turn was too large to store: approving still performs the
+   * action, but the agent stops there instead of carrying on with the result.
+   */
+  resumable: boolean;
+};
+
+/** What the chat shows once a card has been acted on. */
+export type ApprovalDecision = "approved" | "rejected" | "expired";
 
 export type ActivityStatus = "running" | "done" | "error";
 
