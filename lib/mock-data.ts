@@ -111,3 +111,89 @@ export const MOCK_INTEGRATIONS: MockIntegration[] = [
   { key: "github", name: "GitHub", description: "Read repositories, issues and pull requests.", mark: "GH", color: "#24292F" },
   { key: "discord", name: "Discord", description: "Read and reply in servers you choose.", mark: "Di", color: "#5865F2" },
 ];
+
+/**
+ * Marketplace templates. "Use template" opens Create agent filled in from one of these.
+ * TODO(backend): a templates table (and community templates). Tools named here that
+ * don't exist yet (slack.post, github.read, …) are shown for the design but not granted.
+ */
+export type MockTemplate = {
+  key: string;
+  name: string;
+  description: string;
+  category: "Email" | "Research" | "Engineering" | "Productivity" | "Sales";
+  tools: string[];
+  avatarSeed: string;
+  instructions: string;
+};
+
+export const MOCK_TEMPLATES: MockTemplate[] = [
+  {
+    key: "inbox-digest",
+    name: "Inbox digest",
+    description: "Summarizes unread email each morning and groups duplicate threads.",
+    category: "Email",
+    tools: ["gmail.read", "slack.post"],
+    avatarSeed: "green-inbox",
+    instructions:
+      "Every weekday morning, read my unread Gmail from the last 24 hours. Group duplicate threads, flag anything that needs a reply, and post a short digest to my Inbox.",
+  },
+  {
+    key: "research-brief",
+    name: "Research brief",
+    description: "Finds the day’s top stories on a topic and writes two-line summaries.",
+    category: "Research",
+    tools: ["web.search", "web.fetch"],
+    avatarSeed: "purple-research",
+    instructions:
+      "Find the 5 most important stories on the topic I give you, summarize each in two lines, and link the source.",
+  },
+  {
+    key: "code-reviewer",
+    name: "Code reviewer",
+    description: "Reads a pull request and leaves review notes you can edit.",
+    category: "Engineering",
+    tools: ["github.read"],
+    avatarSeed: "peach-review",
+    instructions:
+      "Review the pull request I share. Point out bugs, risky changes and missing tests first, then style. Keep each note short and specific.",
+  },
+  {
+    key: "standup-writer",
+    name: "Standup writer",
+    description: "Turns yesterday’s Jira updates into a standup note.",
+    category: "Productivity",
+    tools: ["jira.read", "slack.post"],
+    avatarSeed: "teal-standup",
+    instructions:
+      "Each weekday at 9:30, turn yesterday's Jira updates into a three-part standup note: done, doing, blocked.",
+  },
+  {
+    key: "meeting-prep",
+    name: "Meeting prep",
+    description: "Pulls the agenda, attendees and related docs before each meeting.",
+    category: "Productivity",
+    tools: ["calendar.read", "drive.read"],
+    avatarSeed: "green-meeting",
+    instructions:
+      "Before each meeting, list the agenda, who is attending and any related documents, in five lines or fewer.",
+  },
+  {
+    key: "lead-follow-up",
+    name: "Lead follow-up",
+    description: "Drafts a follow-up email after each new form response.",
+    category: "Sales",
+    tools: ["gmail.create_draft"],
+    avatarSeed: "purple-lead",
+    instructions:
+      "When I paste a new lead's form response, draft a friendly follow-up email that answers what they asked and suggests a next step. Save it as a draft; never send.",
+  },
+];
+
+/** The template the Marketplace features in its hero. */
+export const MOCK_FEATURED_TEMPLATE = {
+  key: "inbox-digest",
+  title: "Inbox digest",
+  pitch:
+    "Every weekday at 9:00, read unread Gmail, group duplicate threads, and post a short digest to your Inbox or Slack.",
+};

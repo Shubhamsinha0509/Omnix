@@ -89,15 +89,16 @@ function CapabilityBox({
 
 /** The Create agent form card and its actions (11-create-agent). */
 export function CreateAgentForm({
-  initialSeed,
+  initialDraft,
   model,
   limits,
 }: {
-  initialSeed: string;
+  /** Empty, or filled in from a Marketplace template. */
+  initialDraft: AgentDraft;
   model: { id: string; label: string };
   limits: { steps: number; toolCalls: number };
 }) {
-  const [draft, setDraft] = useState<AgentDraft>({ name: "", instructions: "", avatarSeed: initialSeed });
+  const [draft, setDraft] = useState<AgentDraft>(initialDraft);
   const [capabilities, setCapabilities] = useState<CreateCapabilities>({ webSearch: true, toolUse: true });
   const [advanced, setAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
