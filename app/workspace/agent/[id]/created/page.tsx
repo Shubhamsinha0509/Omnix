@@ -54,7 +54,7 @@ export default async function AgentCreatedPage({ params }: { params: Promise<{ i
             </code>
           ))}
         </div>
-        <div className="flex w-full flex-col justify-center gap-3 pt-2 sm:w-auto sm:flex-row">
+        <div className="flex flex-col justify-center gap-3 pt-2 sm:flex-row">
           <Link href={`/workspace/agent/${agent.id}`} className={buttonVariants()}>
             <Play className="size-3.5 fill-current" />
             Run it now
