@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { TextareaWithCounter } from "@/components/ui/textarea";
 import { MAX_AGENT_INSTRUCTIONS, MAX_AGENT_NAME } from "@/lib/agent-limits";
 import { cn } from "@/lib/utils";
-import { AgentAvatar, randomAvatarSeed } from "./AgentAvatar";
+import { randomAvatarSeed } from "@/lib/avatars";
+import { AgentAvatar } from "./AgentAvatar";
 
 export type AgentDraft = {
   name: string;

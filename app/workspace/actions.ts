@@ -9,7 +9,7 @@ import { getOwnedAgent } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 import { getConnection } from "@/lib/integrations/connections";
 import { TOOLS, isNativeTool } from "@/lib/tools";
-import { AVATAR_SEED_PATTERN } from "@/components/custom/workspace/AgentAvatar";
+import { AVATAR_SEED_PATTERN } from "@/lib/avatars";
 import { MAX_AGENT_INSTRUCTIONS, MAX_AGENT_NAME } from "@/lib/agent-limits";
 
 export type AgentInput = {

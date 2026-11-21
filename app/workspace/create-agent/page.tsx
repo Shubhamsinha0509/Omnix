@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { HeroWash, PageWrap } from "@/components/custom/design/HeroWash";
 import { CreateAgentForm } from "@/components/custom/workspace/CreateAgentForm";
-import { randomAvatarSeed } from "@/components/custom/workspace/AgentAvatar";
+import { randomAvatarSeed } from "@/lib/avatars";
 import { CHAT_MODEL } from "@/lib/ai";
 import { LIMITS } from "@/lib/agent/runner";
 import { modelLabel } from "@/lib/format";
