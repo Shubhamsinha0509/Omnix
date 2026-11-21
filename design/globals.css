@@ -1,0 +1,289 @@
+/* ==========================================================================
+   Omnix design tokens — shadcn/ui-compatible theme for Tailwind CSS v4
+   Mirrors the Figma file "Omnix Design System" (collections: Primitives,
+   Color [Light/Dark], Spacing, Radius). Drop into app/globals.css, replacing
+   the stock neutral :root/.dark blocks.
+   ========================================================================== */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------- Primitives (never used directly in components) ---------- */
+:root {
+  --indigo-50: #eef0ff;
+  --indigo-100: #e0e3ff;
+  --indigo-200: #c7cbfe;
+  --indigo-300: #a5abfb;
+  --indigo-400: #7c83f5;
+  --indigo-500: #6366f1;
+  --indigo-600: #4f46e5;
+  --indigo-700: #4338ca;
+  --indigo-800: #3730a3;
+  --indigo-900: #23205e;
+
+  --slate-0: #ffffff;
+  --slate-25: #f7f8fc;
+  --slate-50: #f1f2f8;
+  --slate-100: #e7e9f2;
+  --slate-200: #d7dae8;
+  --slate-300: #b9bed3;
+  --slate-400: #8c92ac;
+  --slate-500: #646a85;
+  --slate-600: #4a4f68;
+  --slate-700: #33374d;
+  --slate-800: #1f2236;
+  --slate-900: #14162a;
+  --slate-950: #0c0d1c;
+
+  --green-500: #22c55e;
+  --green-600: #16a34a;
+  --green-700: #15803d;
+  --amber-100: #fef3c7;
+  --amber-300: #fcd34d;
+  --amber-500: #f59e0b;
+  --amber-700: #b45309;
+  --amber-900: #451a03;
+  --red-500: #ef4444;
+  --red-600: #dc2626;
+}
+
+/* ---------- Semantic: light ---------- */
+:root {
+  --radius: 0.75rem; /* 12px base; sm 8 / md 12 / lg 16 / xl 20 / 2xl 24 */
+
+  --background: var(--slate-25);          /* app canvas, cool white */
+  --foreground: var(--slate-900);
+  --card: var(--slate-0);
+  --card-foreground: var(--slate-900);
+  --popover: rgb(255 255 255 / 0.82);     /* glass: pair with backdrop-blur-xl */
+  --popover-foreground: var(--slate-900);
+
+  /* Black "Create" buttons stay primary; indigo is the accent. */
+  --primary: var(--slate-900);
+  --primary-foreground: var(--slate-0);
+  --secondary: var(--slate-50);
+  --secondary-foreground: var(--slate-900);
+  --muted: var(--slate-50);
+  --muted-foreground: var(--slate-500);
+  --accent: var(--indigo-50);             /* selection, active nav */
+  --accent-foreground: var(--indigo-700);
+  --destructive: var(--red-600);
+  --border: var(--slate-100);
+  --input: var(--slate-200);
+  --ring: var(--indigo-500);
+
+  /* Omnix extensions */
+  --brand: var(--indigo-500);             /* fills, toggles, focus, progress */
+  --brand-foreground: var(--slate-0);
+  --brand-text: var(--indigo-600);        /* links/indigo text: 6.3:1 on white */
+  --brand-subtle: var(--indigo-50);
+  --success: var(--green-600);
+  --success-text: var(--green-700);
+  --warning: var(--amber-500);
+  --warning-subtle: var(--amber-100);
+  --warning-text: var(--amber-700);       /* "Writes" badge */
+  --status-active: var(--green-600);
+  --status-running: var(--indigo-500);
+  --status-paused: var(--amber-500);
+  --run-panel: var(--slate-900);          /* dark execution panel, both themes */
+  --run-panel-foreground: var(--slate-50);
+  --run-panel-muted: var(--slate-400);
+  --wash-1: rgb(124 131 245 / 0.18);      /* radial hero washes */
+  --wash-2: rgb(165 171 251 / 0.22);
+
+  --sidebar: var(--slate-0);
+  --sidebar-foreground: var(--slate-700);
+  --sidebar-primary: var(--slate-900);
+  --sidebar-primary-foreground: var(--slate-0);
+  --sidebar-accent: var(--indigo-50);
+  --sidebar-accent-foreground: var(--indigo-700);
+  --sidebar-border: var(--slate-100);
+  --sidebar-ring: var(--indigo-500);
+
+  --chart-1: var(--indigo-500);
+  --chart-2: var(--indigo-300);
+  --chart-3: var(--green-500);
+  --chart-4: var(--amber-500);
+  --chart-5: var(--slate-400);
+
+  /* Elevation: layered, indigo-tinted rather than flat grey */
+  --shadow-xs: 0 1px 2px rgb(20 22 42 / 0.05);
+  --shadow-sm: 0 1px 2px rgb(20 22 42 / 0.04), 0 2px 8px -2px rgb(79 70 229 / 0.08);
+  --shadow-md: 0 1px 3px rgb(20 22 42 / 0.05), 0 8px 24px -6px rgb(79 70 229 / 0.14);
+  --shadow-lg: 0 2px 6px rgb(20 22 42 / 0.06), 0 24px 48px -12px rgb(79 70 229 / 0.22);
+  --focus-ring: 0 0 0 2px var(--background), 0 0 0 4px var(--indigo-500);
+}
+
+/* ---------- Semantic: dark ---------- */
+.dark {
+  --background: var(--slate-950);
+  --foreground: var(--slate-25);
+  --card: var(--slate-900);
+  --card-foreground: var(--slate-25);
+  --popover: rgb(20 22 42 / 0.82);
+  --popover-foreground: var(--slate-25);
+
+  --primary: var(--slate-25);
+  --primary-foreground: var(--slate-900);
+  --secondary: var(--slate-800);
+  --secondary-foreground: var(--slate-25);
+  --muted: var(--slate-800);
+  --muted-foreground: var(--slate-300);
+  --accent: rgb(99 102 241 / 0.16);
+  --accent-foreground: var(--indigo-200);
+  --destructive: var(--red-500);
+  --border: var(--slate-800);
+  --input: var(--slate-700);
+  --ring: var(--indigo-400);
+
+  --brand: var(--indigo-400);
+  --brand-foreground: var(--slate-950);
+  --brand-text: var(--indigo-300);
+  --brand-subtle: rgb(99 102 241 / 0.16);
+  --success: var(--green-500);
+  --success-text: var(--green-500);
+  --warning: var(--amber-500);
+  --warning-subtle: rgb(245 158 11 / 0.16);
+  --warning-text: var(--amber-300);
+  --status-active: var(--green-500);
+  --status-running: var(--indigo-400);
+  --status-paused: var(--amber-500);
+  --run-panel: #08091a;
+  --run-panel-foreground: var(--slate-50);
+  --run-panel-muted: var(--slate-400);
+  --wash-1: rgb(99 102 241 / 0.22);
+  --wash-2: rgb(67 56 202 / 0.18);
+
+  --sidebar: var(--slate-900);
+  --sidebar-foreground: var(--slate-200);
+  --sidebar-primary: var(--slate-25);
+  --sidebar-primary-foreground: var(--slate-900);
+  --sidebar-accent: rgb(99 102 241 / 0.16);
+  --sidebar-accent-foreground: var(--indigo-200);
+  --sidebar-border: var(--slate-800);
+  --sidebar-ring: var(--indigo-400);
+
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 8px -2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 1px 3px rgb(0 0 0 / 0.35), 0 8px 24px -6px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 48px -12px rgb(0 0 0 / 0.6);
+  --focus-ring: 0 0 0 2px var(--background), 0 0 0 4px var(--indigo-400);
+}
+
+/* ---------- Tailwind theme mapping ---------- */
+@theme inline {
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-figtree), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  /* type scale (size / line-height) */
+  --text-display-xl: 4rem;     --text-display-xl--line-height: 4.25rem;   /* 64/68 */
+  --text-display-l: 2.5rem;    --text-display-l--line-height: 2.75rem;    /* 40/44 */
+  --text-h1: 1.75rem;          --text-h1--line-height: 2.125rem;          /* 28/34 */
+  --text-h2: 1.25rem;          --text-h2--line-height: 1.75rem;           /* 20/28 */
+  --text-h3: 1rem;             --text-h3--line-height: 1.5rem;            /* 16/24 */
+  --text-body-l: 1rem;         --text-body-l--line-height: 1.625rem;      /* 16/26 */
+  --text-body: 0.875rem;       --text-body--line-height: 1.375rem;        /* 14/22 */
+  --text-body-s: 0.8125rem;    --text-body-s--line-height: 1.25rem;       /* 13/20 */
+  --text-caption: 0.75rem;     --text-caption--line-height: 1rem;         /* 12/16 */
+
+  --radius-sm: calc(var(--radius) - 4px);   /* 8  inputs inside cards, badges */
+  --radius-md: var(--radius);               /* 12 buttons, inputs */
+  --radius-lg: calc(var(--radius) + 4px);   /* 16 cards, tiles */
+  --radius-xl: calc(var(--radius) + 8px);   /* 20 drawer, run panel */
+  --radius-2xl: calc(var(--radius) + 12px); /* 24 hero cards, auth card */
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1); /* soft overshoot */
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;   /* hover, toggle knob */
+  --duration-base: 200ms;   /* popover, tab indicator */
+  --duration-slow: 250ms;   /* drawer, run-step reveal */
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-text: var(--brand-text);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-text: var(--warning-text);
+  --color-status-active: var(--status-active);
+  --color-status-running: var(--status-running);
+  --color-status-paused: var(--status-paused);
+  --color-run-panel: var(--run-panel);
+  --color-run-panel-foreground: var(--run-panel-foreground);
+  --color-run-panel-muted: var(--run-panel-muted);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground font-sans antialiased; }
+  h1, h2, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+  code, kbd, .font-mono { font-family: var(--font-mono); font-size: 0.92em; }
+  :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: inherit; }
+}
+
+/* Hero / empty-state wash (use on landing, auth, home greeting, empty chat) */
+@utility bg-wash {
+  background:
+    radial-gradient(60% 50% at 20% 0%, var(--wash-1), transparent 70%),
+    radial-gradient(50% 45% at 85% 10%, var(--wash-2), transparent 70%),
+    var(--background);
+}
+
+/* Glass for floating surfaces: drawer, popovers, profile menu */
+@utility glass {
+  background: var(--popover);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgb(255 255 255 / 0.6);
+}
+.dark .glass { border-color: rgb(255 255 255 / 0.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
