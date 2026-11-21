@@ -14,10 +14,13 @@ export const metadata: Metadata = {
 
 // The names match the tokens in globals.css: --font-sans, --font-display, --font-mono.
 const figtree = Figtree({ subsets: ["latin"], variable: "--font-figtree", display: "swap" });
+// The optical-size axis, as the reference loads it (opsz 12..96): headings set at 28–40px
+// get the narrower cut meant for those sizes instead of the display one.
 const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
   variable: "--font-bricolage",
   display: "swap",
+  axes: ["opsz"],
 });
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
