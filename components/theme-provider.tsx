@@ -17,7 +17,7 @@ export function setReduceMotion(on: boolean) {
 }
 
 /**
- * Light, dark or system. The choice is stored in localStorage ("theme") and applied as a
+ * Light by default; dark or system when chosen. The choice is stored in localStorage ("theme") and applied as a
  * class on <html>, which is what the `.dark` tokens in globals.css key off. Also applies
  * the saved Reduce motion preference.
  */
@@ -33,7 +33,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <NextThemesProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <NextThemesProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
       {children}
     </NextThemesProvider>
   );

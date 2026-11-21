@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { SidebarContent, type ShellUser, type SidebarAgent } from "./AppSidebar";
 import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 
 /**
  * Below 768px the sidebar becomes this 56px bar (`header.topbar`): menu, logo, and a
@@ -36,6 +37,7 @@ export function MobileTopBar(props: {
       <span className="min-w-0 flex-1">
         <Logo />
       </span>
+      <ThemeToggle className="size-11" />
       <Link
         href="/workspace/create-agent"
         aria-label="Create new agent"

@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 
@@ -10,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HeroWash } from "@/components/custom/design/HeroWash";
 import { AgentAvatar } from "@/components/custom/workspace/AgentAvatar";
+import { ThemeToggle } from "@/components/custom/shell/ThemeToggle";
 
 const OAUTH_ERRORS: Record<string, string> = {
   OAuthSignin: "Couldn't start signing in with that provider. Please try again.",
@@ -45,10 +45,17 @@ function GitHubMark() {
  * Sign in and sign up (design/reference/02-auth.html). Google and GitHub are the real
  * NextAuth providers; email sign-in has no provider yet, so the form says so.
  */
-export function AuthCard({ mode }: { mode: "sign-in" | "sign-up" }) {
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/workspace";
-  const urlError = searchParams.get("error");
+export function AuthCard({
+  mode,
+  callbackUrl: requested,
+  error: urlError,
+}: {
+  mode: "sign-in" | "sign-up";
+  callbackUrl?: string;
+  error?: string;
+}) {
+  // Only paths on this site: an absolute URL here would send people elsewhere after sign-in.
+  const callbackUrl = requested && requested.startsWith("/") && !requested.startsWith("//") ? requested : "/workspace";
   const [loading, setLoading] = useState<"google" | "github" | null>(null);
   const [email, setEmail] = useState("");
   const [notice, setNotice] = useState<string | null>(
@@ -70,6 +77,7 @@ export function AuthCard({ mode }: { mode: "sign-in" | "sign-up" }) {
   return (
     <div className="relative flex min-h-svh items-center justify-center overflow-hidden p-6">
       <HeroWash className="top-0 h-full" />
+      <ThemeToggle className="absolute top-4 right-4" />
       <main className="relative flex w-full max-w-[440px] flex-col gap-6 rounded-2xl border bg-card px-8 py-10 shadow-lg">
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="flex">

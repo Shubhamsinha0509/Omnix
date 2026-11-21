@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
 import { ProfileMenu } from "./ProfileMenu";
 import { openSearch } from "./SearchCommand";
+import { ThemeToggle } from "./ThemeToggle";
 
 export type SidebarAgent = { id: string; name: string; avatarSeed: string };
 export type ShellUser = {
@@ -74,8 +75,9 @@ export function SidebarContent({ agents, unread, user, tokensUsedPercent, onNavi
 
   return (
     <div className="flex min-h-full flex-col gap-1 px-4 py-5">
-      <div className="px-2 pb-3">
+      <div className="flex items-center justify-between gap-2 pb-3 pl-2">
         <Logo />
+        <ThemeToggle className="max-md:hidden" />
       </div>
 
       <Link

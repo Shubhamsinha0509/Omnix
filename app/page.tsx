@@ -5,6 +5,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { HeroWash } from "@/components/custom/design/HeroWash";
 import { RunStepRow } from "@/components/custom/design/RunStepRow";
 import { Logo } from "@/components/custom/shell/Logo";
+import { ThemeToggle } from "@/components/custom/shell/ThemeToggle";
 import { AgentAvatar } from "@/components/custom/workspace/AgentAvatar";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +80,7 @@ export default function LandingPage() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           <Link href="/sign-in" className={cn(buttonVariants({ variant: "ghost" }), "hidden md:inline-flex")}>
             Sign in
           </Link>

@@ -1,13 +1,9 @@
-import { Suspense } from "react";
-
 import { AuthCard } from "@/components/custom/auth/AuthCard";
 
-/** Sign up: the sign-in card (02-auth) with its own heading and link. */
-export default function SignUpPage() {
-  // useSearchParams (callbackUrl, error) needs a Suspense boundary.
-  return (
-    <Suspense>
-      <AuthCard mode="sign-up" />
-    </Suspense>
-  );
+type Props = { searchParams: Promise<{ callbackUrl?: string; error?: string }> };
+
+/** Sign up: the sign-in card (02-auth) with its own heading and link, server-rendered. */
+export default async function SignUpPage({ searchParams }: Props) {
+  const { callbackUrl, error } = await searchParams;
+  return <AuthCard mode="sign-up" callbackUrl={callbackUrl} error={error} />;
 }
