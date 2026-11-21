@@ -15,6 +15,7 @@ import {
   CodeBlockTitle,
 } from "@/components/ui/code-block";
 import { useHighlightedCode } from "@/hooks/use-highlighted-code";
+import { ChatTable, ChatTableCell, ChatTableHeaderCell } from "@/components/custom/design/ChatTable";
 
 /** A fenced code block, highlighted by shiki and safe to re-render while it streams. */
 function CodeFence({ code, language }: { code: string; language: string }) {
@@ -74,7 +75,7 @@ const components: Components = {
       href={href}
       target="_blank"
       rel="noopener noreferrer nofollow"
-      className="font-medium underline underline-offset-2 hover:text-primary"
+      className="font-medium text-brand-text hover:underline"
     >
       {children}
     </a>
@@ -85,15 +86,10 @@ const components: Components = {
     </blockquote>
   ),
   hr: () => <hr className="my-4 border-border" />,
-  table: ({ children }) => (
-    <div className="my-3 w-full overflow-x-auto first:mt-0 last:mb-0">
-      <table className="w-full border-collapse text-left text-xs">{children}</table>
-    </div>
-  ),
-  th: ({ children }) => (
-    <th className="border border-border bg-muted px-2.5 py-1.5 font-semibold">{children}</th>
-  ),
-  td: ({ children }) => <td className="border border-border px-2.5 py-1.5 align-top">{children}</td>,
+  // Tables merge duplicate rows (the same thread twice) into one with a ×N badge.
+  table: ({ children }) => <ChatTable>{children}</ChatTable>,
+  th: ({ children }) => <ChatTableHeaderCell>{children}</ChatTableHeaderCell>,
+  td: ({ children }) => <ChatTableCell>{children}</ChatTableCell>,
   // Inline code. Fenced blocks never reach this: `pre` below replaces them whole.
   code: ({ children, className }) => (
     <code className={cn("rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]", className)}>
@@ -112,7 +108,7 @@ const components: Components = {
  */
 function MarkdownImpl({ content, className }: { content: string; className?: string }) {
   return (
-    <div className={cn("min-w-0 text-sm leading-relaxed", className)}>
+    <div className={cn("min-w-0 text-body", className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>

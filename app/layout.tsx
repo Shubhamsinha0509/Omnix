@@ -4,6 +4,7 @@ import { Bricolage_Grotesque, Figtree, JetBrains_Mono } from "next/font/google";
 
 import { AuthProvider } from "@/components/session-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "Omnix — AI agents that work for you",
@@ -36,7 +37,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="text-body">
 
         <ThemeProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {/* toast.add({ title, type }) from anywhere (components/ui/toast). */}
+            <Toaster>{children}</Toaster>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

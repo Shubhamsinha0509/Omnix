@@ -311,3 +311,9 @@
   outline: none;
   box-shadow: var(--focus-ring);
 }
+
+/* In every reference screen <h2> is the Figtree .h2 style (20/28, 600), not the display
+   face; only .h0/.h1 headings use Bricolage. The reference wins over the base rule above. */
+@layer base {
+  h2 { font-family: var(--font-sans); letter-spacing: -0.005em; }
+}
