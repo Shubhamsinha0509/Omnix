@@ -35,7 +35,7 @@ export async function disconnectAccount(connectionId: string): Promise<Connectio
   const deleted = await deleteConnection(user.id, connectionId);
   if (!deleted) return { error: "Couldn't disconnect that account. Please try again." };
 
-  revalidatePath("/workspace/connections");
+  revalidatePath("/workspace/integrations");
   revalidatePath("/workspace", "layout");
   return undefined;
 }

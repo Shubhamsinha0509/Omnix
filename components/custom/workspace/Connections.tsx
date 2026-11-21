@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { disconnectAccount } from "@/app/workspace/connections/actions";
+import { disconnectAccount } from "@/app/workspace/integrations/actions";
 import type { SafeConnection } from "@/lib/integrations/connections";
 
 /** What a provider is called and what it can do, for the "available" list. */
@@ -28,7 +28,7 @@ const PROVIDERS = [
     icon: Mail,
     description: "Let an agent search and read your email, write drafts, and send with your approval.",
     /** A GET that redirects, so connecting is a plain link. */
-    connectHref: "/api/connections/gmail/start?returnTo=/workspace/connections",
+    connectHref: "/api/connections/gmail/start?returnTo=/workspace/integrations",
   },
 ];
 

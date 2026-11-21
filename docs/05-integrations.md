@@ -92,7 +92,7 @@ Notes for Slack, Notion and Jira above describe their direct APIs — relevant f
 
 ## Connections UI — **built** (Phase 3)
 
-- **Connections page** (`/workspace/connections`): connected accounts with their status
+- **Connections page** (`/workspace/integrations`): connected accounts with their status
   (active / expired / reconnect needed) and what each one may do, plus what is available to
   connect. Connecting is a plain link to a GET that redirects.
 - **Agent settings → Tools:** every tool, grouped by where it comes from, with a switch

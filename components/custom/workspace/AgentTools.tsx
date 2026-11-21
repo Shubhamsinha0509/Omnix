@@ -108,7 +108,7 @@ export default function AgentTools({ agentId, tools, connections }: Props) {
                 <Plug className="size-4 shrink-0" />
                 <span>
                   No {group.title} account connected.{" "}
-                  <Link href="/workspace/connections" className="underline underline-offset-4">
+                  <Link href="/workspace/integrations" className="underline underline-offset-4">
                     Connect one
                   </Link>{" "}
                   to use these.

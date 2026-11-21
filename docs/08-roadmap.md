@@ -53,7 +53,7 @@ quota on Gemini's free tier).
 - [x] Tools: `gmail.search`, `gmail.read`, `gmail.create_draft`, `gmail.send` — `lib/tools/gmail.ts` over `lib/integrations/gmail.ts`
 - [x] Approvals: table, inline approval card in chat, execute stored payload — `lib/agent/approvals.ts`, `resumeAgent()`, `POST /api/approvals/:id` (decision D35)
 - [x] Agent settings → Tools: choose tools + connection per agent — `agent_tools` table, `resolveAgentTools()`, `components/custom/workspace/AgentTools.tsx`
-- [x] Connections page — `/workspace/connections`
+- [x] Connections page — `/workspace/integrations`
 - [x] Google Cloud set up: Gmail API enabled, consent screen in Testing, test users added, redirect URI registered, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env` — steps in [connecting Gmail](README.md#connecting-gmail)
 - [ ] Walk the live loop against a real mailbox: connect → search → read → draft → send with an approval
 - [ ] Start reading Google's verification requirements (restricted scopes + CASA) — see [security](07-security.md#google-verification)

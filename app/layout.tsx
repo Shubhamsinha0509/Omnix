@@ -32,7 +32,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       suppressHydrationWarning
       className={`${figtree.variable} ${bricolage.variable} ${jetbrainsMono.variable}`}
     >
-      <body>
+      {/* 14/22 body text, as every reference screen sets on its root. */}
+      <body className="text-body">
+
         <ThemeProvider>
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
