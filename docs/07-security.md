@@ -16,7 +16,7 @@ An agent that can both read untrusted content **and** send or delete things can 
 | **Show exactly what will happen** | **Built.** The card is built from the validated arguments (`summarise` on the tool), so it shows the real recipient, subject and body — and those same arguments are what execute. `bcc` is deliberately not offered, because a recipient the card can't show is not reviewable (D37) |
 | **Least privilege** | **Built.** A tool that reaches a connected account is off until the user turns it on for that agent, and Gmail is asked for `gmail.readonly` + `gmail.compose` only — no `gmail.modify` while labelling isn't a tool |
 | **Treat tool output as data** | **Built.** A tool marked `untrustedOutput` (`web.fetch`, `gmail.search`, `gmail.read`) has its result wrapped with a note saying it is untrusted data, and the system prompt tells the agent never to follow instructions found inside a tool result and to tell the user when content tried |
-| **Limit blast radius** | Rate limits per tool (e.g. max emails sent per hour), recipient allow-lists as an option |
+| **Limit blast radius** | Rate limits per tool (e.g. max emails sent per hour), recipient allow-lists as an option. **Partly built:** unattended work is capped at 4 runs an hour per task, 20 tasks per agent and 50 background runs a day per user (D45), which bounds how often an injected instruction can be acted on |
 | **Audit log** | **Built, best effort.** Model turns and tool calls are written to `run_steps`, with secret-looking keys and URL credentials redacted. A failed insert is logged and the run carries on (`stepLogger`), so the trail can miss steps and is not a guaranteed-complete record |
 | **MCP allow-list** | Only vetted MCP servers; a malicious server can hide instructions in its tool descriptions ("tool poisoning"). MCP tools need approval unless we've reviewed them as read-only ([integrations](05-integrations.md#mcp-rules)) |
 
@@ -84,6 +84,33 @@ row, so access actually ends rather than only our copy of the token disappearing
 - Tokens are never sent to the browser, never put in prompts, never placed in a sandbox VM, and our code never logs them. One caveat: a URL the model chose can itself carry a secret (`?access_token=…`), and tool arguments and results are logged. So the audit log also cleans URLs — credentials in `user:pass@` and secret-looking query parameters are replaced with `[redacted]`, and tool arguments are parsed before logging so nested credential keys are caught (`lib/agent/runs.ts`, `lib/agent/runner.ts`). That is a safety net based on names, not a guarantee.
 - `.env` holds our own secrets (`NEXTAUTH_SECRET`, `DATABASE_URL`, `OPENROUTER_API_KEY`, OAuth client secrets, the token-encryption key). It must never be committed. In production, secrets live in the hosting provider's secret store.
 
+## Agents acting with nobody watching
+
+A scheduled run is the same agent with the same tools, minus the person who would have
+noticed. What keeps that honest:
+
+- **The approval still happens.** A background run creates the same card from the same
+  validated arguments, then *waits* — up to 24 hours — and the stored payload is what runs
+  when the user agrees (D41). It is not weakened to "approve automatically because nobody
+  is here"; an unanswered card expires and the action does not happen.
+- **The card is in the Inbox, not in a stream.** It outlives the run that asked, so the
+  decision is made by a person reading the real recipient and the real body, the same as
+  in chat.
+- **Nothing new is reachable.** A task runs with the tools the user switched on for that
+  agent, through `resolveAgentTools()`, and its prompt is the user's own saved
+  instruction. Email delivery (`lib/delivery/email.ts`) sends **as Omnix to its own
+  user** and is deliberately not a tool, so there is no path by which an agent could use
+  it to mail a stranger.
+- **It is all in the log.** Every background run writes `runs` and `run_steps` like any
+  other, and the Runs tab shows the timeline — which is the only way to find out what an
+  agent did at 9am while you were asleep.
+
+The run page shows step payloads as **text**, never Markdown or HTML: it is the one place
+content an agent read is shown back in full, so it gets no chance to be interpreted. The
+same applies to a delivered result — the inbox renders it as Markdown with no raw HTML
+(D19), and the email's HTML part is escaped from the text rather than built from the
+content.
+
 ## Authorisation
 
 - Every API route and server action checks the session **and** that the user owns the agent / conversation / connection / approval it touches. (Done for every route and action there is: chat, agents, the Gmail connect flow, tool grants and approval decisions.)
@@ -110,7 +137,10 @@ Other providers (Slack App Directory, Atlassian, Notion) have their own review p
 
 - A privacy policy that says what we access, why, and how long we keep it.
 - Users can delete an agent (removes its conversations, runs, memories and VM) and their whole account.
-- Decide retention for run logs that contain email/Slack content (**Open**).
+- **Decided (D43):** a run step's `payload` is emptied after 30 days by a nightly sweep
+  and the row is kept; notifications are deleted after 90 days. So the audit trail — what
+  ran, when, and whether it worked — lasts for ever, and the email and web content inside
+  it does not.
 - Data sent to models: OpenRouter routes to whichever provider serves the chosen model, so the data-use terms are that provider's, not OpenRouter's. Check them per model before real user data is involved. (**Open**)
 
 ## Checklist before any public deployment
@@ -119,6 +149,7 @@ Other providers (Slack App Directory, Atlassian, Notion) have their own review p
 - [ ] Inngest signing key configured
 - [x] Token encryption in place
 - [x] Approvals on for all write/destructive tools by default
-- [ ] Per-user rate and usage limits
+- [ ] Per-user rate and usage limits (partly: D45 caps unattended runs)
+- [x] Retention for run contents decided and running (D43)
 - [ ] Privacy policy and terms
 - [ ] Google verification started (if Gmail is offered publicly)

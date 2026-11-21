@@ -14,12 +14,10 @@ import {
   Mail,
   Search,
   Settings,
-  ShieldCheck,
   SquarePen,
   Square,
   TriangleAlert,
   Wrench,
-  X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -41,7 +39,12 @@ import {
 } from "@/lib/agent/events";
 import type { ConversationSummary } from "@/lib/agents";
 import { AgentAvatar } from "./AgentAvatar";
+import AgentConfigPanel, { type AgentConfig } from "./AgentConfigPanel";
+import { ApprovalCard } from "./ApprovalCard";
 import { Markdown } from "./Markdown";
+
+/** Width at which the configuration panel fits beside the chat; below it, it overlays. */
+const PANEL_BREAKPOINT = "(min-width: 1280px)";
 
 export type ChatMessage = {
   id: string;
@@ -80,6 +83,8 @@ type Props = {
   /** Cards still waiting in this conversation, so a reload doesn't lose them. */
   initialApprovals: ApprovalRequest[];
   aiReady: boolean;
+  /** What the configuration panel beside the chat needs: tools, accounts, chat count. */
+  config: AgentConfig;
 };
 
 /**
@@ -110,8 +115,19 @@ export default function AgentChat({
   initialMessages,
   initialApprovals,
   aiReady,
+  config,
 }: Props) {
   const router = useRouter();
+  /**
+   * The configuration panel. "auto" (the start) shows it where it fits beside the chat
+   * and hides it on narrower screens — decided in CSS, so server and browser agree.
+   * Once the user toggles it, their choice wins.
+   */
+  const [panel, setPanel] = useState<"auto" | "open" | "closed">("auto");
+  const togglePanel = () => {
+    const visible = panel === "open" || (panel === "auto" && window.matchMedia(PANEL_BREAKPOINT).matches);
+    setPanel(visible ? "closed" : "open");
+  };
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [chat, setChat] = useState<ChatMessage[]>(() => withApprovals(initialMessages, initialApprovals));
   const [input, setInput] = useState("");
@@ -381,7 +397,8 @@ export default function AgentChat({
   };
 
   return (
-    <div className="flex h-svh flex-col">
+    <div className="flex h-svh">
+      <div className="flex min-w-0 flex-1 flex-col">
       {/* Header */}
       <header className="flex items-center gap-3 border-b px-6 py-3">
         <div className="size-9 shrink-0">
@@ -430,12 +447,11 @@ export default function AgentChat({
         </Button>
 
         <Button
-          variant="ghost"
+          variant={panel === "open" ? "secondary" : "ghost"}
           size="icon"
-          aria-label="Agent settings"
-          // Rendered as a link, not a <button>: tell Base UI so it doesn't add button semantics.
-          nativeButton={false}
-          render={<Link href={`/workspace/agent/${agent.id}/settings`} />}
+          aria-label="Agent configuration"
+          title="Agent configuration"
+          onClick={togglePanel}
         >
           <Settings />
         </Button>
@@ -578,94 +594,26 @@ export default function AgentChat({
           </p>
         </div>
       </div>
-    </div>
-  );
-}
-
-type CardProps = {
-  request: ApprovalRequest;
-  state: "pending" | "deciding" | ApprovalDecision;
-  /** True while anything else in the chat is streaming, so one turn runs at a time. */
-  busy: boolean;
-  onDecide: (decision: "approve" | "reject") => void;
-};
-
-/**
- * The approval card: what the agent is about to do, in the agent's own data rather than
- * its own words.
- *
- * The values here come from the stored action, so what is shown is what will run. That is
- * the whole point — an agent reading a stranger's email can be talked into sending one,
- * and the only reliable defence is a person seeing the real recipient and the real body
- * before it goes (docs/07-security.md).
- */
-function ApprovalCard({ request, state, busy, onDecide }: CardProps) {
-  const pending = state === "pending" || state === "deciding";
-  const deciding = state === "deciding";
-
-  return (
-    <div className="mt-3 overflow-hidden rounded-xl border border-amber-500/40 bg-amber-500/5">
-      <div className="flex items-center gap-2 border-b border-amber-500/30 px-4 py-2.5">
-        <ShieldCheck className="size-4 shrink-0 text-amber-700 dark:text-amber-400" />
-        <span className="min-w-0 flex-1 text-sm font-medium">{request.summary}</span>
-        {pending && (
-          <span className="shrink-0 text-xs text-muted-foreground">
-            expires {formatDistanceToNow(new Date(request.expiresAt), { addSuffix: true })}
-          </span>
-        )}
       </div>
 
-      <dl className="divide-y divide-amber-500/20 px-4 py-1 text-sm">
-        {request.details.map((detail) => (
-          <div key={detail.label} className="flex gap-3 py-2">
-            <dt className="w-20 shrink-0 text-muted-foreground">{detail.label}</dt>
-            <dd className="min-w-0 flex-1 break-words whitespace-pre-wrap">
-              {detail.value || <span className="text-muted-foreground">(empty)</span>}
-            </dd>
-          </div>
-        ))}
-      </dl>
-
-      <div className="flex flex-wrap items-center gap-2 border-t border-amber-500/30 px-4 py-3">
-        {pending ? (
-          <>
-            <Button size="sm" disabled={busy || deciding} onClick={() => onDecide("approve")}>
-              {deciding ? <Loader2 className="animate-spin" /> : <Check />}
-              {deciding ? "Working..." : "Approve"}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || deciding}
-              onClick={() => onDecide("reject")}
-            >
-              <X />
-              Reject
-            </Button>
-            {!request.resumable && (
-              <span className="text-xs text-muted-foreground">
-                The agent won&apos;t carry on afterwards — this turn was too large to keep.
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            {state === "approved" ? (
-              <>
-                <Check className="size-4" /> Approved — this was carried out.
-              </>
-            ) : state === "rejected" ? (
-              <>
-                <X className="size-4" /> Rejected — nothing happened.
-              </>
-            ) : (
-              <>
-                <Clock className="size-4" /> Expired without a decision, so nothing happened.
-              </>
-            )}
-          </span>
-        )}
-      </div>
+      {/* Agent configuration: beside the chat where it fits, over it on narrower screens. */}
+      <aside
+        aria-label="Agent configuration"
+        className={[
+          "w-[380px] max-w-full shrink-0 flex-col border-l bg-background",
+          panel === "closed" && "hidden",
+          panel === "auto" && "hidden xl:flex",
+          panel === "open" && "fixed inset-y-0 right-0 z-30 flex shadow-2xl xl:static xl:z-auto xl:shadow-none",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <AgentConfigPanel
+          agent={agent}
+          {...config}
+          onClose={() => setPanel("closed")}
+        />
+      </aside>
     </div>
   );
 }

@@ -73,16 +73,55 @@ ready to try. Until someone walks it — connect → search → read → draft �
 approval — the OAuth exchange, token refresh, real-world MIME parsing and the pause/resume
 path are code that type-checks rather than code that is known to work.
 
-## Phase 4 — Tasks (agents work on their own)
+## Phase 4 — Tasks (agents work on their own) ✅
 
 **Done when:** "every weekday at 9:00, summarise my inbox" runs without the user, and the result shows up.
 
-- [ ] `tasks` table; Tasks tab on each agent (create/edit/enable)
-- [ ] Inngest function that runs a task with each step durable
-- [ ] Scheduler (cron in the user's timezone) + "Run now"
-- [ ] Approvals in background runs (`waitForEvent`, 24 h expiry) + in-app notifications
-- [ ] Runs tab: timeline of each run
-- [ ] Delivery: in-app and email
+- [x] `tasks` table; Tasks tab on each agent (create/edit/enable) — `db/schema.ts`, `lib/tasks.ts`, `/workspace/agent/[id]/tasks`, also the Schedule tab of the panel beside the chat
+- [x] Inngest function that runs a task with each step durable — `lib/inngest/tasks.ts`; the runner takes a `Durability` adapter so chat and tasks stay one loop (D41)
+- [x] Scheduler (cron in the user's timezone) + "Run now" — a minute cron claims due tasks and fans them out (D40); the cron maths, with DST, is `lib/schedule/cron.ts`
+- [x] Approvals in background runs (`waitForEvent`, 24 h expiry) + in-app notifications — the run waits and carries on; cards appear in the Inbox (D41, D42)
+- [x] Runs tab: timeline of each run — `/workspace/agent/[id]/runs`, step by step, including chat turns going back to Phase 2
+- [x] Delivery: in-app and email — `lib/delivery/`; email is Resend over HTTPS and falls back to the inbox (D44)
+- [x] Answered the two open questions this phase gated: run-log retention (D43) and what bounds unattended spend until the budget is set (D45)
+
+### What is verified, and what isn't
+
+**Walked live on 20 Nov 2026**, against the real database and a local Inngest dev server:
+
+- **"Run now"** — the event reached `agent-task-run`, which ran the agent as four durable
+  steps (model turn → `time.now` call → its result → model turn), answered with the right
+  local time, finished in 17s and delivered the result to the Inbox.
+- **The schedule** — a task due 30 seconds ago was claimed by the minute cron, ran with
+  `trigger: "schedule"`, had its `next_run_at` advanced to the next quarter hour and its
+  `last_run_at` set, and a tick immediately afterwards claimed nothing.
+- **The queries behind the UI** — 31 checks against the live database: creating and editing
+  tasks, the next run computed in `Asia/Kolkata`, disabling clearing the clock, two
+  simultaneous scheduler ticks claiming the same task exactly once, the inbox and its
+  unread count, `listRuns`/`getRunDetail` over runs from Phase 2, and a different user's id
+  seeing none of it.
+- **The approval row's state machine** — 13 checks: one decision claimed, a second click
+  getting nothing, the stored payload handed back unchanged, an overdue card refusing to be
+  claimed and then reading as expired. This is what the 24-hour wait and its lost-event
+  fallback rest on.
+- **The cron engine** — 44 cases, including both daylight-saving edges in New York (the
+  skipped 02:30 still runs), half-hour and 45-minute zones, "every weekday" from a Friday
+  evening, and schedules that can never happen.
+
+Three things are built but **not yet watched end to end**:
+
+- **An approval inside a background run.** The row-level machinery is tested and the wait
+  is wired, but nobody has yet let a task ask for `gmail.send`, answered the card in the
+  Inbox and seen the agent carry on. It needs a Gmail write tool switched on, which touches
+  a real mailbox — do it with the Phase 3 walk-through.
+- **Email delivery.** No `RESEND_API_KEY` is set, so what is proven is the fallback: the
+  result went to the Inbox and said why email didn't.
+- **A step being retried.** Inngest's own retry path hasn't been forced.
+
+One caveat worth repeating: a task run uses the same model as chat, which is still the free
+`:free` one (D38). Unattended runs now send prompts — and anything the agent reads — to
+that provider with nobody watching, which makes switching back to a paid model (D34) more
+pressing than it was in Phase 3, not less.
 
 ## Phase 5 — More integrations
 

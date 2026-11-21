@@ -40,31 +40,34 @@ export default async function WorkspacePage() {
     );
   }
 
-  const myAgents = await db
-    .select({
-      id: agents.id,
-      name: agents.name,
-      avatarSeed: agents.avatarSeed,
-      instructions: agents.instructions,
-    })
-    .from(agents)
-    .where(eq(agents.userId, user.id))
-    .orderBy(desc(agents.createdAt));
+  // Both queries only need the user, so they run together: one round-trip, not two.
+  const [myAgents, recent] = await Promise.all([
+    db
+      .select({
+        id: agents.id,
+        name: agents.name,
+        avatarSeed: agents.avatarSeed,
+        instructions: agents.instructions,
+      })
+      .from(agents)
+      .where(eq(agents.userId, user.id))
+      .orderBy(desc(agents.createdAt)),
 
-  // Latest chats across every agent, so the user can pick up where they left off.
-  const recent = await db
-    .select({
-      id: conversations.id,
-      title: conversations.title,
-      agentId: agents.id,
-      agentName: agents.name,
-      avatarSeed: agents.avatarSeed,
-    })
-    .from(conversations)
-    .innerJoin(agents, eq(conversations.agentId, agents.id))
-    .where(eq(conversations.userId, user.id))
-    .orderBy(desc(conversations.updatedAt))
-    .limit(RECENT_CHATS);
+    // Latest chats across every agent, so the user can pick up where they left off.
+    db
+      .select({
+        id: conversations.id,
+        title: conversations.title,
+        agentId: agents.id,
+        agentName: agents.name,
+        avatarSeed: agents.avatarSeed,
+      })
+      .from(conversations)
+      .innerJoin(agents, eq(conversations.agentId, agents.id))
+      .where(eq(conversations.userId, user.id))
+      .orderBy(desc(conversations.updatedAt))
+      .limit(RECENT_CHATS),
+  ]);
 
   const firstName = user.name?.trim().split(" ")[0];
 

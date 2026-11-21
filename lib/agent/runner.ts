@@ -18,10 +18,18 @@ import {
   type ToolDefinition,
   type ToolResult,
 } from "@/lib/tools";
-import { claimApproval, clearResume, createApproval, type ApprovalResume } from "./approvals";
+import { claimApproval, clearResume, createApproval } from "./approvals";
+import { immediate, type ApprovalGate, type Durability } from "./durability";
 import { friendlyModelError } from "./errors";
 import type { RunEvent } from "./events";
-import { finishRun, logStep, nextSeq, pauseRunForApproval, startRun } from "./runs";
+import {
+  finishRun,
+  logStep,
+  nextSeq,
+  pauseRunForApproval,
+  resumeRunAfterApproval,
+  startRun,
+} from "./runs";
 
 /**
  * Guard rails. Every run is bounded: a model that keeps calling tools, a tool that
@@ -102,6 +110,17 @@ export type RunAgentOptions = {
   signal: AbortSignal;
   /** Called as the run progresses: reply text, tool activity, notes, approvals. */
   emit: (event: RunEvent) => void;
+  /**
+   * How each model call and tool call is executed. Chat runs them straight away; a
+   * background run wraps each one in a durable Inngest step (decision D41).
+   */
+  durability?: Durability;
+  /**
+   * What to do when the agent asks permission. Given one, the run **waits** for the
+   * decision and carries on (background). Without one, the turn stops with
+   * `waiting_approval` and `resumeAgent` picks it up later (chat, D35).
+   */
+  awaitApproval?: ApprovalGate;
 };
 
 export type RunOutcome = {
@@ -122,33 +141,50 @@ export type RunOutcome = {
  */
 export async function runAgent(options: RunAgentOptions): Promise<RunOutcome> {
   const { agent, user, trigger, history, timezone, signal, emit } = options;
+  const durability = options.durability ?? immediate;
 
   const tools = await resolveAgentTools(agent);
 
+  // Opening the run is itself a step, so a background run that is picked up again
+  // continues the run it started instead of opening a second one. `startedAt` comes back
+  // with it because the system prompt says what day it is: a run that waits overnight for
+  // an approval must not have "today" change underneath it half way through.
+  const started = await durability.step("start-run", async () => ({
+    runId: await startRun({
+      agentId: agent.id,
+      userId: user.id,
+      trigger,
+      conversationId: options.conversationId ?? null,
+      taskId: options.taskId ?? null,
+    }),
+    startedAt: new Date().toISOString(),
+  }));
+
   const messages: ChatCompletionMessageParam[] = [
-    { role: "system", content: buildSystemPrompt(agent, { timezone, hasTools: tools.length > 0 }) },
+    {
+      role: "system",
+      content: buildSystemPrompt(agent, {
+        timezone,
+        hasTools: tools.length > 0,
+        now: new Date(started.startedAt),
+      }),
+    },
     ...history.map((message) => ({ role: message.role, content: message.content })),
   ];
-
-  const runId = await startRun({
-    agentId: agent.id,
-    userId: user.id,
-    trigger,
-    conversationId: options.conversationId ?? null,
-    taskId: options.taskId ?? null,
-  });
 
   return drive({
     agent,
     user,
-    runId,
+    runId: started.runId,
     conversationId: options.conversationId ?? null,
     tools,
     messages,
     timezone,
     signal,
     emit,
-    log: stepLogger(runId, 0),
+    durability,
+    awaitApproval: options.awaitApproval,
+    log: stepLogger(started.runId, 0, durability.memoised),
     spent: { iteration: 0, toolCalls: 0, inputTokens: 0, outputTokens: 0 },
   });
 }
@@ -187,38 +223,20 @@ export async function resumeAgent(options: ResumeAgentOptions): Promise<ResumeRe
   await log("approval", row.tool, { decision, approvalId: row.id, summary: row.summary });
 
   const tools = await resolveAgentTools(agent);
-  const entry = tools.find((candidate) => candidate.tool.key === row.tool);
 
-  const act = async (): Promise<Decided> => {
-    if (decision === "rejected") {
-      // Not a failure: the user was asked and answered. The model is told so it can finish.
-      return {
-        ok: false,
-        status: "cancelled",
-        payload: { error: "The user declined this action. Don't try it again unless they ask." },
-      };
-    }
-    if (!entry || isNativeTool(entry.tool)) {
-      // The tool was switched off, or its account disconnected, between card and click.
-      const error = `${row.tool} isn't available on this agent any more, so the approved action wasn't carried out.`;
-      await log("error", row.tool, { reason: "tool_unavailable" });
-      emit({ t: "note", v: error });
-      return { ok: false, status: "failed", payload: { error } };
-    }
-    return runApprovedCall({
-      entry,
-      payload,
-      agent,
-      user,
-      runId,
-      timezone: resume?.timezone ?? "UTC",
-      signal,
-      emit,
-      log,
-    });
-  };
-
-  const result = await act();
+  const result = await actOnDecision({
+    decision,
+    entry: tools.find((candidate) => candidate.tool.key === row.tool),
+    toolKey: row.tool,
+    payload,
+    agent,
+    user,
+    runId,
+    timezone: resume?.timezone ?? "UTC",
+    signal,
+    emit,
+    log,
+  });
   await clearResume(row.id);
 
   // No stored conversation means the turn can't be continued (the pause was too large to
@@ -245,6 +263,8 @@ export async function resumeAgent(options: ResumeAgentOptions): Promise<ResumeRe
       timezone: resume.timezone,
       signal,
       emit,
+      // A resumed chat turn is one request again, like the one that paused (D35).
+      durability: immediate,
       log,
       spent: {
         iteration: resume.iteration,
@@ -271,6 +291,10 @@ type DriveOptions = {
   emit: (event: RunEvent) => void;
   log: StepLogger;
   spent: Spent;
+  /** Chat runs everything now; a background run wraps each piece in a durable step (D41). */
+  durability: Durability;
+  /** Set for a background run, which waits for an approval instead of stopping (D41). */
+  awaitApproval?: ApprovalGate;
 };
 
 /**
@@ -282,7 +306,7 @@ type DriveOptions = {
  * rejected by the provider.
  */
 async function drive(options: DriveOptions): Promise<RunOutcome> {
-  const { agent, user, runId, messages, timezone, signal, emit, log } = options;
+  const { agent, user, runId, messages, timezone, signal, emit, log, durability } = options;
 
   const allTools = options.tools.map((entry) => entry.tool);
   const executableOnly = allTools.filter((tool) => !isNativeTool(tool));
@@ -302,9 +326,13 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
   /**
    * Text is added to the run's reply as it streams, not when the turn completes, so
    * words the user has already seen are still saved if the turn fails halfway.
+   *
+   * A durable run can't work that way: a turn that is handed back from memory never
+   * streams, so there the reply is built from each completed turn's stored text instead,
+   * and this is only here to feed anything watching live.
    */
   const onText = (text: string) => {
-    reply += text;
+    if (!durability.memoised) reply += text;
     emit({ t: "text", v: text });
   };
 
@@ -339,27 +367,39 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
 
   try {
     for (let iteration = options.spent.iteration + 1; iteration <= LIMITS.maxIterations; iteration++) {
-      const turn = await turnWithFallback();
+      /**
+       * One model turn, as one durable step: the call to the provider and the log of
+       * what it said. They go together because a retry must not write the step twice,
+       * and because everything the loop does next is decided from this result alone.
+       */
+      const turn = await durability.step(`model-${iteration}`, async () => {
+        const result = await turnWithFallback();
+
+        await log("model", null, {
+          iteration,
+          text: result.text,
+          calls: result.calls.map((call) => ({ name: call.name, args: argsForLog(call.args) })),
+          citations: result.citations,
+          finishReason: result.finishReason,
+        });
+
+        // Search runs inside OpenRouter, so we learn about it from the citations and the
+        // usage it reports back — logged like any other tool call.
+        if (result.searchRan) {
+          await log("tool_call", "web.search", { native: true, searches: result.serverToolCalls });
+          await log("tool_result", "web.search", { citations: result.citations });
+        }
+
+        return result;
+      });
+
       inputTokens += turn.inputTokens;
       outputTokens += turn.outputTokens;
       // Searches OpenRouter ran inside this turn spend the same budget as our own tools.
       toolCalls += turn.serverToolCalls;
-
-      await log("model", null, {
-        iteration,
-        text: turn.text,
-        calls: turn.calls.map((call) => ({ name: call.name, args: argsForLog(call.args) })),
-        citations: turn.citations,
-        finishReason: turn.finishReason,
-      });
-
-      // Search runs inside OpenRouter, so we learn about it from the citations and the
-      // usage it reports back — show it, and log it like any other tool call.
-      if (turn.searchRan) {
-        reportSearch(turn.citations, allTools, emit);
-        await log("tool_call", "web.search", { native: true, searches: turn.serverToolCalls });
-        await log("tool_result", "web.search", { citations: turn.citations });
-      }
+      // Nothing streamed if the turn came back from memory, so take its words from here.
+      if (durability.memoised) reply += turn.text;
+      if (turn.searchRan) reportSearch(turn.citations, allTools, emit);
 
       messages.push(turn.assistantMessage);
 
@@ -383,73 +423,149 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
         }
         toolCalls++;
 
-        const outcome = await executeCall({
-          call,
-          tools: options.tools,
-          agent,
-          user,
-          runId,
-          timezone,
-          signal,
-          emit,
-          log,
-        });
+        // One tool call, one durable step. A tool that fails is retried on its own, and
+        // one that has already run — an email that went out — is not run a second time.
+        const outcome = await durability.step(`tool-${iteration}-${at}`, () =>
+          executeCall({
+            call,
+            tools: options.tools,
+            agent,
+            user,
+            runId,
+            timezone,
+            signal,
+            emit,
+            log,
+          }),
+        );
 
         if (outcome.kind === "message") {
           messages.push(outcome.message);
           continue;
         }
 
-        // The agent wants permission. Everything the model asked for in this turn still
-        // has to be answered before the conversation can be stored, so the calls after
-        // this one are told they didn't run — the model can ask for them again once the
-        // user has decided. One approval at a time keeps the card unambiguous (D35).
-        for (const later of turn.calls.slice(at + 1)) {
-          messages.push(
-            toolMessage(later.id, {
-              error: "Not run: an earlier action in this turn is waiting for the user's approval.",
-            }),
-          );
+        // The agent wants permission.
+        //
+        // A chat turn ends here, and every call the model made has to be answered before
+        // the conversation can be stored, so the ones after this are told they didn't run
+        // — the model may ask again once the user has decided. One card at a time also
+        // keeps "Approve" unambiguous in the chat (D35). A background run has no such
+        // problem: it waits for each decision in turn and then carries on down the list.
+        if (!options.awaitApproval) {
+          for (const later of turn.calls.slice(at + 1)) {
+            messages.push(
+              toolMessage(later.id, {
+                error: "Not run: an earlier action in this turn is waiting for the user's approval.",
+              }),
+            );
+          }
         }
 
-        const approval = await createApproval({
-          runId,
-          userId: user.id,
-          conversationId: options.conversationId,
-          stepId: outcome.stepId,
-          tool: outcome.tool.key,
-          toolCallId: call.id,
-          card: outcome.card,
-          payload: outcome.payload,
-          resume: { messages, timezone, iteration, toolCalls, inputTokens, outputTokens },
+        const entry = options.tools.find((candidate) => candidate.tool.key === outcome.toolKey);
+        const label = entry?.tool.label ?? outcome.toolKey;
+
+        const approval = await durability.step(`approval-${iteration}-${at}`, async () => {
+          const created = await createApproval({
+            runId,
+            userId: user.id,
+            conversationId: options.conversationId,
+            stepId: outcome.stepId,
+            tool: outcome.toolKey,
+            toolCallId: call.id,
+            card: outcome.card,
+            payload: outcome.payload,
+            // A background run keeps its state in the step it is waiting on, so there is
+            // nothing to store on the row — and what there would be holds whatever the
+            // agent has read.
+            resume: options.awaitApproval
+              ? undefined
+              : { messages, timezone, iteration, toolCalls, inputTokens, outputTokens },
+          });
+          return {
+            id: created.id,
+            summary: created.summary,
+            details: created.details,
+            expiresAt: created.expiresAt.toISOString(),
+            resumable: created.resumable,
+          };
         });
 
         emit({
           t: "approval",
           v: {
             id: approval.id,
-            tool: outcome.tool.key,
-            label: outcome.tool.label,
+            tool: outcome.toolKey,
+            label,
             summary: approval.summary,
             details: approval.details,
-            expiresAt: approval.expiresAt.toISOString(),
-            resumable: approval.resumable,
+            expiresAt: approval.expiresAt,
+            // A background run always carries on after the decision; a chat turn can only
+            // do so if its conversation was small enough to store (D35).
+            resumable: Boolean(options.awaitApproval) || approval.resumable,
           },
         });
 
-        pausedForApproval = true;
-        break;
+        // Chat: the request ends here and a second one picks the run up (D35).
+        if (!options.awaitApproval) {
+          pausedForApproval = true;
+          break;
+        }
+
+        /**
+         * Background: wait for the decision, then carry on in the same run.
+         *
+         * The wait is durable — it can last the full 24 hours without a process being
+         * held open — so the agent gets to act on the answer and finish what it was
+         * doing, which is the whole point of asking.
+         */
+        await pauseRunForApproval(runId, inputTokens, outputTokens);
+        const decision = await options.awaitApproval({
+          approvalId: approval.id,
+          tool: outcome.toolKey,
+          summary: approval.summary,
+          expiresAt: approval.expiresAt,
+        });
+        await resumeRunAfterApproval(runId);
+
+        const decided = await durability.step(`decision-${iteration}-${at}`, async () => {
+          await log("approval", outcome.toolKey, {
+            decision,
+            approvalId: approval.id,
+            summary: approval.summary,
+          });
+          const result = await actOnDecision({
+            decision,
+            entry,
+            toolKey: outcome.toolKey,
+            payload: outcome.payload,
+            agent,
+            user,
+            runId,
+            timezone,
+            signal,
+            emit,
+            log,
+          });
+          await clearResume(approval.id);
+          return result;
+        });
+
+        messages.push(toolMessage(call.id, decided.payload));
       }
 
       if (pausedForApproval) break;
 
       if (stopAfterTools) {
-        await log("error", null, { reason: "max_tool_calls", limit: LIMITS.maxToolCalls });
+        await durability.step("limit-tool-calls", () =>
+          log("error", null, { reason: "max_tool_calls", limit: LIMITS.maxToolCalls }),
+        );
         note(stopAfterTools);
         break;
       }
       if (iteration === LIMITS.maxIterations) {
-        await log("error", null, { reason: "max_iterations", limit: LIMITS.maxIterations });
+        await durability.step("limit-iterations", () =>
+          log("error", null, { reason: "max_iterations", limit: LIMITS.maxIterations }),
+        );
         note(`I stopped after ${LIMITS.maxIterations} steps without finishing. Try asking in smaller pieces.`);
       }
     }
@@ -611,12 +727,18 @@ type StreamChunk = {
   } | null;
 };
 
-/** What one tool call turned into: an answer for the model, or a question for the user. */
+/**
+ * What one tool call turned into: an answer for the model, or a question for the user.
+ *
+ * The approval carries the tool's **key**, not the tool: this value is the result of a
+ * durable step in a background run, so it has to survive being written to JSON and read
+ * back, and a `ToolDefinition` has functions on it. The caller looks the tool up again.
+ */
 type CallOutcome =
   | { kind: "message"; message: ChatCompletionMessageParam }
   | {
       kind: "approval";
-      tool: ToolDefinition;
+      toolKey: string;
       /** The validated arguments, which is exactly what will run if the user agrees. */
       payload: Record<string, unknown>;
       card: ApprovalSummary;
@@ -683,7 +805,13 @@ async function executeCall(args: ExecuteCallArgs): Promise<CallOutcome> {
       status: "running",
       detail: "waiting for your approval",
     });
-    return { kind: "approval", tool, payload: checked.value, card: cardFor(tool, checked.value), stepId };
+    return {
+      kind: "approval",
+      toolKey: tool.key,
+      payload: checked.value,
+      card: cardFor(tool, checked.value),
+      stepId,
+    };
   }
 
   emit({
@@ -736,6 +864,74 @@ async function executeCall(args: ExecuteCallArgs): Promise<CallOutcome> {
 type Decided =
   | { ok: true; payload: unknown }
   | { ok: false; status: "failed" | "cancelled"; payload: unknown };
+
+/**
+ * Turns a decision into the message the model reads next — the one path shared by a chat
+ * approval resumed in a second request and a background run that waited for the answer.
+ *
+ * Nothing here trusts the model: on approval the stored payload runs, and on anything
+ * else the tool is simply never called. The model is *told* what happened either way, so
+ * the agent finishes its turn with "I didn't send it, you declined" rather than stopping
+ * mid-sentence.
+ */
+async function actOnDecision(args: {
+  decision: "approved" | "rejected" | "expired";
+  /** The tool as this agent can use it now, which may be nothing at all. */
+  entry: ResolvedTool | undefined;
+  toolKey: string;
+  payload: Record<string, unknown>;
+  agent: Agent;
+  user: User;
+  runId: string;
+  timezone: string;
+  signal: AbortSignal;
+  emit: (event: RunEvent) => void;
+  log: StepLogger;
+}): Promise<Decided> {
+  const { decision, entry, toolKey, emit, log } = args;
+
+  if (decision === "rejected") {
+    // Not a failure: the user was asked and answered. The model is told so it can finish.
+    return {
+      ok: false,
+      status: "cancelled",
+      payload: { error: "The user declined this action. Don't try it again unless they ask." },
+    };
+  }
+
+  if (decision === "expired") {
+    await log("error", toolKey, { reason: "approval_expired" });
+    emit({ t: "note", v: `Nobody approved "${toolKey}" in time, so it wasn't done.` });
+    return {
+      ok: false,
+      status: "cancelled",
+      payload: {
+        error:
+          "The user never answered the approval request, so this was not done. Say what is still waiting.",
+      },
+    };
+  }
+
+  if (!entry || isNativeTool(entry.tool)) {
+    // The tool was switched off, or its account disconnected, between card and decision.
+    const error = `${toolKey} isn't available on this agent any more, so the approved action wasn't carried out.`;
+    await log("error", toolKey, { reason: "tool_unavailable" });
+    emit({ t: "note", v: error });
+    return { ok: false, status: "failed", payload: { error } };
+  }
+
+  return runApprovedCall({
+    entry,
+    payload: args.payload,
+    agent: args.agent,
+    user: args.user,
+    runId: args.runId,
+    timezone: args.timezone,
+    signal: args.signal,
+    emit,
+    log,
+  });
+}
 
 /**
  * Runs the action the user just approved.
@@ -983,12 +1179,18 @@ type StepLogger = (
 /**
  * Numbers the steps of a run so the timeline reads in order. A resumed run starts from
  * where the paused one left off, which is what `startSeq` is for.
+ *
+ * A durable run counts from the database instead (`fromDb`). Its writes happen inside
+ * Inngest steps, which are skipped when their result is already known, so a counter held
+ * in memory would be back at zero while half the timeline was already written — and two
+ * steps would end up sharing a number.
  */
-function stepLogger(runId: string, startSeq: number): StepLogger {
+function stepLogger(runId: string, startSeq: number, fromDb = false): StepLogger {
   let seq = startSeq;
   return async function log(type, tool, payload) {
     try {
-      return await logStep({ runId, seq: seq++, type, tool, payload });
+      const at = fromDb ? await nextSeq(runId) : seq++;
+      return await logStep({ runId, seq: at, type, tool, payload });
     } catch (error) {
       // A failed log must never fail the run the user is waiting on.
       console.error("Failed to write run step:", error);

@@ -67,8 +67,15 @@ export async function createAgent(input: AgentInput): Promise<ActionResult> {
   redirect(`/workspace/agent/${agentId}`);
 }
 
-/** Saves changes to an agent the signed-in user owns, then reopens its chat. */
-export async function updateAgent(agentId: string, input: AgentInput): Promise<ActionResult> {
+/**
+ * Saves changes to an agent the signed-in user owns, then reopens its chat — or, with
+ * `stay`, just refreshes, for the configuration panel that sits beside the chat.
+ */
+export async function updateAgent(
+  agentId: string,
+  input: AgentInput,
+  options: { stay?: boolean } = {},
+): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You need to be signed in to edit an agent." };
   if (!UUID.test(agentId)) return { error: "Agent not found." };
@@ -89,6 +96,7 @@ export async function updateAgent(agentId: string, input: AgentInput): Promise<A
   }
 
   revalidatePath("/workspace", "layout");
+  if (options.stay) return undefined;
   redirect(`/workspace/agent/${agentId}`);
 }
 

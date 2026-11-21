@@ -56,6 +56,12 @@ type PromptOptions = {
   timezone: string;
   /** True when the agent has tools in this run; adds the rules for using them. */
   hasTools: boolean;
+  /**
+   * When the run started. Given, "today" is fixed for the whole run — a background run
+   * that waits overnight for an approval must not change what day it thinks it is half
+   * way through (`runAgent` passes the instant the run opened).
+   */
+  now?: Date;
 };
 
 /** Turns an agent's settings into the system message the model follows. */
@@ -75,7 +81,7 @@ export function buildSystemPrompt(agent: Pick<Agent, "name" | "instructions">, o
     `Context: today is ${new Intl.DateTimeFormat("en-GB", {
       timeZone: options.timezone,
       dateStyle: "full",
-    }).format(new Date())} in the user's timezone (${options.timezone}).`,
+    }).format(options.now ?? new Date())} in the user's timezone (${options.timezone}).`,
   );
 
   if (options.hasTools) sections.push(TOOL_RULES);

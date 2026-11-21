@@ -151,6 +151,69 @@ security assessment (CASA) — weeks and real money. Read Google's current requi
 early; they gate launch, not development. See
 [security](07-security.md#google-verification).
 
+## Running tasks locally
+
+Tasks are Inngest functions, and Inngest is what calls them. In development that means a
+**second terminal**:
+
+```bash
+npm run dev           # terminal 1
+npm run inngest:dev   # terminal 2 — discovers http://localhost:3000/api/inngest
+```
+
+No keys are needed locally. Without the second terminal, nothing is broken and nothing
+runs: "Run now" says it couldn't reach the background job service, and a schedule simply
+never fires. The dev server's dashboard (it prints the URL, usually
+<http://localhost:8288>) shows every run step by step, which is the fastest way to see
+where one stopped.
+
+**Restart `next dev` after changing `db/schema.ts`.** A dev server that has been running
+since before the change can keep a stale copy of the schema module and fail inside a job
+with something unhelpful like `Cannot read properties of undefined (reading 'id')`. The
+code is fine; the process isn't. This bit us once already.
+
+Three functions are served (`lib/inngest/functions.ts`):
+
+| Function | Trigger | What it does |
+|---|---|---|
+| `task-scheduler` | cron, every minute | Claims tasks whose `next_run_at` has passed and fans out one event each (D40) |
+| `agent-task-run` | `agent/task.run` | Runs one task: the agent, each step durable, then delivery (D41) |
+| `retention-sweep` | cron, 04:10 UTC | Empties run-step payloads older than 30 days (D43) |
+
+### Walking a task
+
+1. **Run now.** Open an agent → **Tasks** → New task. Name it, write "What is the date and
+   time right now?", pick any schedule, leave the inbox ticked, create it, then press **Run
+   now**. Within a second or two the Inngest dashboard shows `agent-task-run`, the agent's
+   **Runs** tab shows a run with trigger "Run now", and the result appears in **Inbox**
+   (the sidebar counts it).
+2. **A real schedule.** Edit the task to **Custom (cron)** a couple of minutes from now —
+   e.g. `37 14 * * *` for 14:37 — and check the form's "next run" line reads the time you
+   meant *in your timezone*. Leave it alone and watch it fire on its own; that is the whole
+   phase working.
+3. **An approval.** Give the agent `gmail.send` with "Ask me before this runs" on, and a
+   task like "draft and send a one-line hello to my own address". The run stops, a card
+   turns up in the Inbox with the real recipient and body, and **Approve** makes the agent
+   finish the job and deliver its reply. **Reject** leaves the mailbox untouched. A card
+   nobody answers expires after 24 hours and the agent is told it wasn't allowed.
+4. **The log.** The run's page lists every step — model turns, tool calls, the approval and
+   what it returned.
+
+### Emailing results (optional)
+
+A task can deliver to your email as well as the Inbox. That needs two settings:
+
+```env
+RESEND_API_KEY=re_...
+EMAIL_FROM="Omnix <omnix@your-verified-domain.com>"
+```
+
+Get the key at [resend.com/api-keys](https://resend.com/api-keys) and verify a sending
+domain first — Resend will refuse a `from` address on a domain you don't own. With these
+unset, nothing is lost: the task says so and the result goes to the Inbox instead (D44).
+Omnix emails **you**, never anybody else; an agent emailing somebody is `gmail.send`,
+which needs a connected account and an approval card.
+
 ## How we work
 
 1. Pick the next unchecked item in the [roadmap](08-roadmap.md).

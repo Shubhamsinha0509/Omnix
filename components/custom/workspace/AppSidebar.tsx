@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ChevronsUpDown, Plug, Plus, Store } from "lucide-react";
+import { ChevronsUpDown, Inbox, Plug, Plus, Store } from "lucide-react";
 import { cn } from "cn";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,7 +30,7 @@ export type SidebarAgent = {
   avatarSeed: string;
 };
 
-const AppSidebar = ({ agents }: { agents: SidebarAgent[] }) => {
+const AppSidebar = ({ agents, unread = 0 }: { agents: SidebarAgent[]; unread?: number }) => {
   const pathname = usePathname();
   const { data: session } = useSession();
 
@@ -107,6 +107,20 @@ const AppSidebar = ({ agents }: { agents: SidebarAgent[] }) => {
       {/* Footer: connections, marketplace + current user */}
       <SidebarFooter className="gap-1 px-3 pb-4">
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={pathname.startsWith("/workspace/inbox")}
+              render={<Link href="/workspace/inbox" />}
+            >
+              <Inbox />
+              <span className="flex-1">Inbox</span>
+              {unread > 0 && (
+                <span className="rounded-full bg-primary px-1.5 py-0.5 text-xs font-medium text-primary-foreground">
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               isActive={pathname.startsWith("/workspace/connections")}
