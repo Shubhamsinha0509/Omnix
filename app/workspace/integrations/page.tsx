@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { CheckCircle2, TriangleAlert } from "lucide-react";
 
+import { HeroWash, PageWrap } from "@/components/custom/design/HeroWash";
 import Connections from "@/components/custom/workspace/Connections";
+import { TOOLS } from "@/lib/tools";
 import { getCurrentUser } from "@/lib/auth";
 import { hasEncryptionKey } from "@/lib/crypto";
 import { listConnections } from "@/lib/integrations/connections";
@@ -17,48 +19,49 @@ type Props = {
   }>;
 };
 
-export default async function ConnectionsPage({ searchParams }: Props) {
+/** Integrations (design/reference/15-integrations.html). */
+export default async function IntegrationsPage({ searchParams }: Props) {
   const user = await getCurrentUser();
   if (!user) notFound();
 
   const [connections, result] = await Promise.all([listConnections(user.id), searchParams]);
 
+  // How many tools each provider gives agents, for the tiles ("4 tools").
+  const toolCounts: Record<string, number> = {};
+  for (const tool of Object.values(TOOLS)) {
+    if ("provider" in tool && tool.provider) toolCounts[tool.provider] = (toolCounts[tool.provider] ?? 0) + 1;
+  }
+
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-12">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
-        <p className="mt-1.5 text-muted-foreground">
-          Accounts your agents can use. Connecting one here doesn&apos;t give any agent access — you
-          switch its tools on per agent, in that agent&apos;s settings.
-        </p>
-      </header>
-
-      {result.connected && (
-        <p className="mb-6 flex items-start gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-          <span>
-            {result.connected} is connected.
-            {result.partial === "write" && " You didn't grant permission to send, so only reading works."}
-            {result.partial === "read" && " You didn't grant permission to read, so only drafting and sending work."}
-            {result.partial === "read,write" && " No mailbox permission was granted, so no Gmail tool will work — reconnect and approve the boxes."}
-            {result.warning === "no_refresh_token" &&
-              " Google didn't return a refresh token, so this will stop working in about an hour. Disconnect and connect again."}
-          </span>
-        </p>
-      )}
-
-      {result.error && (
-        <p role="alert" className="mb-6 flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-          <span>{describeError(result.error)}</span>
-        </p>
-      )}
-
-      <Connections
-        connections={connections}
-        googleReady={hasGoogleOAuth()}
-        encryptionReady={hasEncryptionKey()}
-      />
+    <div className="relative overflow-hidden">
+      <HeroWash className="opacity-60" />
+      <PageWrap width="wide">
+        {result.connected && (
+          <p className="flex items-start gap-2 rounded-md bg-success/10 px-3 py-2 text-body-s text-success-text">
+            <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+            <span>
+              {result.connected} is connected.
+              {result.partial === "write" && " You didn't grant permission to send, so only reading works."}
+              {result.partial === "read" && " You didn't grant permission to read, so only drafting and sending work."}
+              {result.partial === "read,write" && " No mailbox permission was granted, so no Gmail tool will work — reconnect and approve the boxes."}
+              {result.warning === "no_refresh_token" &&
+                " Google didn't return a refresh token, so this will stop working in about an hour. Disconnect and connect again."}
+            </span>
+          </p>
+        )}
+        {result.error && (
+          <p role="alert" className="flex items-start gap-2 rounded-md bg-destructive/10 px-3 py-2 text-body-s text-destructive">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+            <span>{describeError(result.error)}</span>
+          </p>
+        )}
+        <Connections
+          connections={connections}
+          toolCounts={toolCounts}
+          googleReady={hasGoogleOAuth()}
+          encryptionReady={hasEncryptionKey()}
+        />
+      </PageWrap>
     </div>
   );
 }
