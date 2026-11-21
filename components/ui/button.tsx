@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
  * (`.bd`), ghost (`.bg` / `.ibtn`). Heights 40 / 36 (sm); icon buttons 40 / 32 / 44 (lg,
  * the mobile touch size). The focus ring comes from globals.css.
  */
-const buttonVariants = cva(
+const buttonVariantsRaw = cva(
   "group/button inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md border border-transparent bg-clip-padding text-body font-semibold whitespace-nowrap transition-[background-color,color,border-color,opacity] duration-150 outline-none select-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
@@ -42,12 +42,16 @@ const buttonVariants = cva(
   }
 )
 
+/** Merged, so a variant's classes win over the base ones even outside <Button> (links). */
+const buttonVariants = (...args: Parameters<typeof buttonVariantsRaw>) =>
+  cn(buttonVariantsRaw(...args))
+
 function Button({
   className,
   variant = "default",
   size = "default",
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props & VariantProps<typeof buttonVariantsRaw>) {
   return (
     <ButtonPrimitive
       data-slot="button"

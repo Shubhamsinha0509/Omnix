@@ -1,63 +1,41 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
-import { Bot, MessageSquare, Plus, Settings, TriangleAlert } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { MessageSquare, TriangleAlert } from "lucide-react";
 
-import { buttonVariants } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { AgentCard, NewAgentCard } from "@/components/custom/design/AgentCard";
+import { HeroWash, PageWrap } from "@/components/custom/design/HeroWash";
+import { Greeting } from "@/components/custom/home/Greeting";
+import { HomeComposer } from "@/components/custom/home/HomeComposer";
 import { AgentAvatar } from "@/components/custom/workspace/AgentAvatar";
 import { agents, conversations, db } from "@/db";
-import { hasModelKey } from "@/lib/ai";
+import { listAgentCards } from "@/lib/agent-cards";
+import { CHAT_MODEL, hasModelKey } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
+import { modelLabel, shortWhen } from "@/lib/format";
 
+const HOME_AGENTS = 5;
 const RECENT_CHATS = 6;
 
+/** Home (design/reference/03-home.html): greeting, composer, your agents, recent chats. */
 export default async function WorkspacePage() {
   const user = await getCurrentUser();
+  // The workspace is behind the proxy's sign-in check, so this only happens mid-sign-out.
+  if (!user) return null;
 
-  if (!user) {
-    return (
-      <div className="mx-auto w-full max-w-2xl px-6 py-24">
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Bot />
-            </EmptyMedia>
-            <EmptyTitle>Sign in to use Omnix</EmptyTitle>
-            <EmptyDescription>Your agents and chats are tied to your account.</EmptyDescription>
-          </EmptyHeader>
-          <Link href="/sign-in" className={cn(buttonVariants({ size: "lg" }))}>
-            Sign in
-          </Link>
-        </Empty>
-      </div>
-    );
-  }
-
-  // Both queries only need the user, so they run together: one round-trip, not two.
-  const [myAgents, recent] = await Promise.all([
+  const [cards, pickable, recent] = await Promise.all([
+    listAgentCards(user.id, HOME_AGENTS),
+    // Every agent, for the composer's picker.
     db
-      .select({
-        id: agents.id,
-        name: agents.name,
-        avatarSeed: agents.avatarSeed,
-        instructions: agents.instructions,
-      })
+      .select({ id: agents.id, name: agents.name, avatarSeed: agents.avatarSeed })
       .from(agents)
       .where(eq(agents.userId, user.id))
       .orderBy(desc(agents.createdAt)),
-
     // Latest chats across every agent, so the user can pick up where they left off.
     db
       .select({
         id: conversations.id,
         title: conversations.title,
+        updatedAt: conversations.updatedAt,
         agentId: agents.id,
         agentName: agents.name,
         avatarSeed: agents.avatarSeed,
@@ -69,121 +47,68 @@ export default async function WorkspacePage() {
       .limit(RECENT_CHATS),
   ]);
 
-  const firstName = user.name?.trim().split(" ")[0];
+  const firstName = user.name?.trim().split(/\s+/)[0] ?? null;
 
   return (
-    <div className="mx-auto w-full max-w-4xl px-6 py-12">
-      <header className="mb-10">
-        <h1 className="text-3xl font-bold tracking-tight">
-          {firstName ? `Welcome back, ${firstName}` : "Welcome to Omnix"}
-        </h1>
-        <p className="mt-1.5 text-muted-foreground">
-          Create agents, give them instructions, and chat with them.
-        </p>
-      </header>
+    <div className="relative overflow-hidden">
+      <HeroWash />
+      <PageWrap>
+        <div className="flex flex-col gap-2">
+          <Greeting firstName={firstName} />
+          <p className="text-body-l text-muted-foreground">
+            Ask an agent, or create one that runs on its own.
+          </p>
+        </div>
 
-      {!hasModelKey() && (
-        <p className="mb-8 flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
-          <TriangleAlert className="size-4 shrink-0" />
-          AI isn&apos;t set up yet: add OPENROUTER_API_KEY to .env and restart the dev server.
-        </p>
-      )}
-
-      {/* Agents */}
-      <section>
-        <h2 className="mb-3 text-sm font-medium tracking-wider text-muted-foreground uppercase">
-          Your agents
-        </h2>
-
-        {myAgents.length === 0 ? (
-          <Empty className="rounded-xl border border-dashed">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <Bot />
-              </EmptyMedia>
-              <EmptyTitle>No agents yet</EmptyTitle>
-              <EmptyDescription>
-                Your first agent can be anything — a research assistant, an editor, a planner.
-              </EmptyDescription>
-            </EmptyHeader>
-            <Link href="/workspace/create-agent" className={cn(buttonVariants({ size: "lg" }))}>
-              <Plus />
-              Create New Agent
-            </Link>
-          </Empty>
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {myAgents.map((agent) => (
-              <li key={agent.id} className="group relative">
-                <Link
-                  href={`/workspace/agent/${agent.id}`}
-                  className="flex h-full items-start gap-3 rounded-xl border p-4 transition-colors hover:bg-muted/50"
-                >
-                  <span className="size-10 shrink-0">
-                    <AgentAvatar seed={agent.avatarSeed} name={agent.name} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate pe-7 font-medium">{agent.name}</span>
-                    <span className="mt-0.5 line-clamp-2 block text-sm text-muted-foreground">
-                      {agent.instructions || "No instructions yet."}
-                    </span>
-                  </span>
-                </Link>
-                <Link
-                  href={`/workspace/agent/${agent.id}/settings`}
-                  aria-label={`${agent.name} settings`}
-                  className={cn(
-                    buttonVariants({ variant: "ghost", size: "icon-sm" }),
-                    "absolute end-2.5 top-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100",
-                  )}
-                >
-                  <Settings />
-                </Link>
-              </li>
-            ))}
-
-            <li>
-              <Link
-                href="/workspace/create-agent"
-                className="flex h-full items-center gap-3 rounded-xl border border-dashed p-4 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
-              >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
-                  <Plus className="size-5" />
-                </span>
-                <span className="font-medium">Create New Agent</span>
-              </Link>
-            </li>
-          </ul>
+        {!hasModelKey() && (
+          <p className="flex items-center gap-2 rounded-md bg-warning-subtle px-3 py-2 text-body-s text-warning-text">
+            <TriangleAlert className="size-4 shrink-0" />
+            AI isn&apos;t set up yet: add OPENROUTER_API_KEY to .env and restart the dev server.
+          </p>
         )}
-      </section>
 
-      {/* Recent chats */}
-      {recent.length > 0 && (
-        <section className="mt-10">
-          <h2 className="mb-3 text-sm font-medium tracking-wider text-muted-foreground uppercase">
-            Recent chats
-          </h2>
-          <ul className="divide-y rounded-xl border">
-            {recent.map((chat) => (
-              <li key={chat.id}>
+        <HomeComposer agents={pickable} model={{ id: CHAT_MODEL, label: modelLabel(CHAT_MODEL) }} />
+
+        <div className="flex items-center justify-between pt-4">
+          <h2 className="text-h2 font-semibold">Your agents</h2>
+          <Link href="/workspace/agents" className="font-semibold text-brand-text hover:underline">
+            View all
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          {cards.map((card) => (
+            <AgentCard key={card.id} agent={card} />
+          ))}
+          <NewAgentCard />
+        </div>
+
+        {recent.length > 0 && (
+          <>
+            <h2 className="pt-4 text-h2 font-semibold">Recent chats</h2>
+            <div className="divide-y overflow-hidden rounded-lg border bg-card">
+              {recent.map((chat) => (
                 <Link
+                  key={chat.id}
                   href={`/workspace/agent/${chat.agentId}?c=${chat.id}`}
-                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
+                  className="flex min-h-[52px] items-center gap-3 px-4 py-3 text-foreground no-underline transition-colors hover:bg-muted/60"
                 >
                   <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-sm">{chat.title}</span>
-                  <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="min-w-0 flex-1 truncate font-medium">{chat.title}</span>
+                  <span className="hidden items-center gap-2 md:flex">
                     <span className="size-5">
-                      <AgentAvatar seed={chat.avatarSeed} name={chat.agentName} />
+                      <AgentAvatar seed={chat.avatarSeed} name="" />
                     </span>
-                    {chat.agentName}
+                    <span className="text-body-s text-muted-foreground">{chat.agentName}</span>
+                  </span>
+                  <span className="shrink-0 text-body-s text-muted-foreground">
+                    {shortWhen(chat.updatedAt)}
                   </span>
                 </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+              ))}
+            </div>
+          </>
+        )}
+      </PageWrap>
     </div>
   );
 }
