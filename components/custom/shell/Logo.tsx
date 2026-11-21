@@ -5,7 +5,7 @@ import Link from "next/link";
  * The Omnix mark and wordmark. The design ships a placeholder mark
  * (design/assets/logo-mark.svg); this uses the production logo in /public instead.
  */
-export function Logo({ href = "/workspace" }: { href?: string }) {
+export function Logo({ href = "/" }: { href?: string }) {
   return (
     <Link
       href={href}
