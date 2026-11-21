@@ -43,7 +43,21 @@ function validate(input: AgentInput): { error: string } | { values: AgentInput }
   return { values: { name, instructions, avatarSeed } };
 }
 
-export async function createAgent(input: AgentInput): Promise<ActionResult> {
+/**
+ * What Create agent lets you switch off up front (11-create-agent). Both map to built-in
+ * tools that are on by default, so "off" is stored as a disabled grant.
+ */
+export type CreateCapabilities = { webSearch: boolean; toolUse: boolean };
+
+const CAPABILITY_TOOLS: Record<keyof CreateCapabilities, string[]> = {
+  webSearch: ["web.search", "web.fetch"],
+  toolUse: ["time.now"],
+};
+
+export async function createAgent(
+  input: AgentInput,
+  capabilities: CreateCapabilities = { webSearch: true, toolUse: true },
+): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You need to be signed in to create an agent." };
 
@@ -57,14 +71,25 @@ export async function createAgent(input: AgentInput): Promise<ActionResult> {
       .values({ userId: user.id, ...checked.values })
       .returning({ id: agents.id });
     agentId = agent.id;
+
+    const off = (Object.keys(CAPABILITY_TOOLS) as (keyof CreateCapabilities)[])
+      .filter((key) => capabilities[key] === false)
+      .flatMap((key) => CAPABILITY_TOOLS[key])
+      .filter((tool) => TOOLS[tool]);
+    if (off.length > 0) {
+      await db
+        .insert(agentTools)
+        .values(off.map((tool) => ({ agentId, tool, enabled: false, connectionId: null, approval: "never" as const })))
+        .onConflictDoNothing();
+    }
   } catch (error) {
     console.error("Failed to create agent:", error);
     return { error: "Couldn't save your agent. Please try again." };
   }
 
-  // Refresh the sidebar (it lives in the workspace layout), then open the new agent.
+  // Refresh the sidebar (it lives in the workspace layout), then show the success screen.
   revalidatePath("/workspace", "layout");
-  redirect(`/workspace/agent/${agentId}`);
+  redirect(`/workspace/agent/${agentId}/created`);
 }
 
 /**
