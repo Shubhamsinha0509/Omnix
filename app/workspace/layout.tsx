@@ -6,7 +6,8 @@ import { MobileTopBar } from "@/components/custom/shell/MobileTopBar";
 import { SearchCommand } from "@/components/custom/shell/SearchCommand";
 import { agents, db } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
-import { MOCK_USAGE } from "@/lib/mock-data";
+import { MOCK_PLAN } from "@/lib/mock-data";
+import { getMonthlyUsage } from "@/lib/usage";
 import { countUnread } from "@/lib/notifications";
 
 /**
@@ -18,7 +19,7 @@ const WorkspaceLayout = async ({ children }: { children: React.ReactNode }) => {
 
   // The signed-in user's agents, newest first, for the sidebar — plus how many unread
   // things their agents have left them, which is the badge beside Inbox.
-  const [userAgents, unread] = user
+  const [userAgents, unread, usage] = user
     ? await Promise.all([
         db
           .select({ id: agents.id, name: agents.name, avatarSeed: agents.avatarSeed })
@@ -26,8 +27,9 @@ const WorkspaceLayout = async ({ children }: { children: React.ReactNode }) => {
           .where(eq(agents.userId, user.id))
           .orderBy(desc(agents.createdAt)),
         countUnread(user.id),
+        getMonthlyUsage(user.id),
       ])
-    : [[], 0];
+    : [[], 0, null];
 
   const shell = {
     agents: userAgents,
@@ -36,10 +38,10 @@ const WorkspaceLayout = async ({ children }: { children: React.ReactNode }) => {
       name: user?.name?.trim() || user?.email?.split("@")[0] || "Guest",
       email: user?.email ?? "",
       image: user?.image ?? null,
-      plan: MOCK_USAGE.plan,
+      plan: MOCK_PLAN.name,
     },
-    // TODO(backend): real token usage — see lib/mock-data.ts.
-    tokensUsedPercent: MOCK_USAGE.tokensUsedPercent,
+    // This month's real tokens against the plan's (mock) allowance.
+    tokensUsedPercent: Math.min(100, Math.round(((usage?.tokens ?? 0) / MOCK_PLAN.tokensPerMonth) * 100)),
   };
 
   return (

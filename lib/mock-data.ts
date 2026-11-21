@@ -6,17 +6,41 @@
  * each one is waiting on. Nothing in this file is read by the agent runner or the API.
  */
 
-/** TODO(backend): token metering per user per month (docs/08-roadmap.md, Phase 7). */
-export type UsageSummary = {
-  plan: "Free" | "Pro";
-  /** Share of this month's token allowance used, 0–100. */
-  tokensUsedPercent: number;
+/**
+ * The user's plan and its allowances. Usage itself is real (lib/usage.ts, from the run
+ * log); what it is measured against isn't.
+ * TODO(backend): plans, limits and billing (docs/08-roadmap.md, Phase 7; pricing is an
+ * open question). The Pro price is the design's placeholder until it is decided.
+ */
+export type Plan = {
+  name: "Free" | "Pro";
+  tokensPerMonth: number;
+  webSearchesPerMonth: number;
+  scheduledAgents: number | "unlimited";
 };
 
-export const MOCK_USAGE: UsageSummary = {
-  plan: "Free",
-  tokensUsedPercent: 12,
+export const MOCK_PLAN: Plan = {
+  name: "Free",
+  tokensPerMonth: 100_000,
+  webSearchesPerMonth: 100,
+  scheduledAgents: 3,
 };
+
+export const MOCK_PLANS = [
+  {
+    name: "Free",
+    price: null,
+    features: ["100K tokens / month", "3 scheduled agents", "Community support"],
+  },
+  {
+    name: "Pro",
+    price: "[YOUR PRICE] / month",
+    features: ["Higher monthly token limit", "Unlimited scheduled agents", "Advanced models", "Priority support"],
+  },
+] as const;
+
+/** TODO(backend): invoices come with billing. */
+export const MOCK_INVOICES: { id: string; date: string; amount: string }[] = [];
 
 /**
  * Per-agent settings shown in the drawer's Settings tab that nothing reads yet.
