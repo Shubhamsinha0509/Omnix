@@ -25,7 +25,7 @@ export default async function AgentSettingsPage({ params }: { params: Promise<{ 
   ]);
 
   return (
-    <div className="flex h-svh flex-col">
+    <div className="flex h-[calc(100svh-3.5rem)] flex-col md:h-svh">
       <AgentNav agent={agent} active="settings" />
       <div className="flex-1 overflow-y-auto">
         <AgentSettings

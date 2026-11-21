@@ -19,7 +19,7 @@ export default async function AgentTasksPage({ params }: { params: Promise<{ id:
   const tasks = await listTasks(agent.id, user.id);
 
   return (
-    <div className="flex h-svh flex-col">
+    <div className="flex h-[calc(100svh-3.5rem)] flex-col md:h-svh">
       <AgentNav agent={agent} active="tasks" />
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl px-6 py-8">
