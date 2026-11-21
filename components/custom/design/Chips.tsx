@@ -48,7 +48,7 @@ export function SuggestionChip({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-input bg-card px-4 whitespace-nowrap text-foreground shadow-xs transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 max-md:max-w-full max-md:whitespace-normal max-md:text-left"
+      className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full max-md:min-h-11 max-md:h-auto max-md:py-2 border border-input bg-card px-4 whitespace-nowrap text-foreground shadow-xs transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 max-md:max-w-full max-md:whitespace-normal max-md:text-left"
     >
       <Sparkle className="size-3.5 shrink-0 text-brand" aria-hidden="true" />
       {children}

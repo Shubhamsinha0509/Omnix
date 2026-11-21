@@ -50,7 +50,7 @@ export function NavItem({
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex h-10 shrink-0 items-center gap-3 rounded-md px-3 font-medium text-foreground transition-colors hover:bg-muted",
+        "flex h-10 shrink-0 items-center gap-3 rounded-md px-3 font-medium text-foreground transition-colors hover:bg-muted max-md:h-11",
         "[&>svg]:size-[18px] [&>svg]:shrink-0 [&>svg]:text-muted-foreground",
         active &&
           "bg-accent font-semibold text-accent-foreground hover:bg-accent [&>svg]:text-brand",
@@ -112,7 +112,7 @@ export function SidebarContent({ agents, unread, user, tokensUsedPercent, onNavi
           onNavigate?.();
           openSearch();
         }}
-        className="flex h-10 shrink-0 cursor-pointer items-center gap-3 rounded-md px-3 text-left font-medium text-foreground transition-colors hover:bg-muted [&>svg]:size-[18px] [&>svg]:text-muted-foreground"
+        className="flex h-10 shrink-0 cursor-pointer items-center gap-3 rounded-md px-3 text-left max-md:h-11 font-medium text-foreground transition-colors hover:bg-muted [&>svg]:size-[18px] [&>svg]:text-muted-foreground"
       >
         <Search />
         <span className="flex-1">Search</span>

@@ -60,7 +60,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
     <TabsPrimitive.Tab
       data-slot="tabs-trigger"
       className={cn(
-        "flex flex-1 cursor-pointer items-center justify-center rounded-sm font-medium whitespace-nowrap text-muted-foreground transition-colors duration-200 outline-none hover:text-foreground disabled:pointer-events-none disabled:opacity-50 data-active:bg-card data-active:text-foreground data-active:shadow-xs [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "relative flex flex-1 cursor-pointer items-center justify-center rounded-sm after:absolute after:inset-x-0 after:top-1/2 after:h-11 after:min-h-full after:-translate-y-1/2 font-medium whitespace-nowrap text-muted-foreground transition-colors duration-200 outline-none hover:text-foreground disabled:pointer-events-none disabled:opacity-50 data-active:bg-card data-active:text-foreground data-active:shadow-xs [&_svg]:pointer-events-none [&_svg]:shrink-0",
         "group-data-[variant=default]/tabs-list:px-3 group-data-[variant=default]/tabs-list:py-1.5 group-data-[variant=default]/tabs-list:[&_svg:not([class*='size-'])]:size-4",
         "group-data-[variant=icon]/tabs-list:flex-col group-data-[variant=icon]/tabs-list:gap-0.5 group-data-[variant=icon]/tabs-list:px-1 group-data-[variant=icon]/tabs-list:py-2 group-data-[variant=icon]/tabs-list:text-caption group-data-[variant=icon]/tabs-list:[&_svg:not([class*='size-'])]:size-4 group-data-[variant=icon]/tabs-list:data-active:[&_svg]:text-brand",
         className

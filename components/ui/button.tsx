@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
  * the mobile touch size). The focus ring comes from globals.css.
  */
 const buttonVariantsRaw = cva(
-  "group/button inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-md border border-transparent bg-clip-padding text-body font-semibold whitespace-nowrap transition-[background-color,color,border-color,opacity] duration-150 outline-none select-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button relative inline-flex shrink-0 cursor-pointer items-center after:absolute after:top-1/2 after:left-1/2 after:size-11 after:min-h-full after:min-w-full after:-translate-1/2 justify-center gap-2 rounded-md border border-transparent bg-clip-padding text-body font-semibold whitespace-nowrap transition-[background-color,color,border-color,opacity] duration-150 outline-none select-none disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
