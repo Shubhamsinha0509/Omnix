@@ -221,3 +221,17 @@ export const MOCK_FEATURED_TEMPLATE = {
   pitch:
     "Every weekday at 9:00, read unread Gmail, group duplicate threads, and post a short digest to your Inbox or Slack.",
 };
+
+/**
+ * Settings sections with nothing behind them yet. Shown as designed, disabled.
+ * TODO(backend): API keys for running agents from code; notification preferences
+ * (approval requests always reach the Inbox today, and failure emails need RESEND_API_KEY).
+ */
+export type ApiKey = { id: string; name: string; preview: string; createdAt: string; lastUsed: string | null };
+export const MOCK_API_KEYS: ApiKey[] = [];
+
+export const MOCK_NOTIFICATION_PREFS = [
+  { key: "approvals", title: "Approval requests", note: "When an agent wants to send, post or edit.", on: true },
+  { key: "failures", title: "Failed runs", note: "Email me when a scheduled run fails.", on: true },
+  { key: "weekly", title: "Weekly summary", note: "What your agents did this week.", on: false },
+];
