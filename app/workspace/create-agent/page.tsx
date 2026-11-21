@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { AgentFields, type AgentDraft } from "@/components/custom/workspace/AgentFields";

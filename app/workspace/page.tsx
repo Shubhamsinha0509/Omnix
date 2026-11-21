@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { Bot, MessageSquare, Plus, Settings, TriangleAlert } from "lucide-react";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 
 import { buttonVariants } from "@/components/ui/button";
 import {

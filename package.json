@@ -6,11 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest"
+    "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
+    "compare": "node --no-warnings scripts/compare.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -50,6 +52,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.16.0",
     "eslint-config-next": "^16.2.6",
+    "playwright": "^1.56.1",
     "shadcn": "^4.19.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.6.3"

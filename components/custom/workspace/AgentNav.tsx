@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CalendarClock, ListOrdered, MessageSquare, SlidersHorizontal } from "lucide-react";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 
 import { AgentAvatar } from "./AgentAvatar";
 

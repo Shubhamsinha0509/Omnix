@@ -3,7 +3,7 @@
 import { isValidElement, memo, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 
 import {
   CodeBlock,
