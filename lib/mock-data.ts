@@ -27,3 +27,64 @@ export const MOCK_AGENT_SETTINGS = {
   isolatedVm: true,
   rememberPastChats: false,
 };
+
+/**
+ * Sample inbox for design checks only: `/workspace/inbox?preview=sample` in development.
+ * The real inbox reads `notifications` (lib/notifications.ts); nothing here is stored.
+ */
+export const MOCK_INBOX_ITEMS = (agent: { id: string; name: string; avatarSeed: string }) => {
+  const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60_000).toISOString();
+  const base = {
+    agentId: agent.id,
+    agentName: agent.name,
+    agentAvatarSeed: agent.avatarSeed,
+    taskName: null,
+    runId: null,
+  };
+  return [
+    {
+      ...base,
+      id: "sample-approval",
+      kind: "approval_request" as const,
+      title: "Wants to send an email",
+      body: "",
+      unread: true,
+      createdAt: at(2),
+      approval: {
+        id: "sample-approval",
+        tool: "gmail.send",
+        label: "Sending email",
+        summary: `${agent.name} wants to send an email`,
+        details: [
+          { label: "To", value: "Outskill (Zoom)" },
+          { label: "Message", value: "Thanks for the reminder. See you at 6:55 PM." },
+        ],
+        expiresAt: at(-60 * 24),
+        resumable: true,
+      },
+      approvalState: "pending" as const,
+    },
+    {
+      ...base,
+      id: "sample-digest",
+      kind: "task_result" as const,
+      title: "Morning inbox digest",
+      body: "5 new emails since yesterday. All unread. Two were the same Outskill thread, so they're listed once.\n\n| From | Subject | Time |\n| --- | --- | --- |\n| Outskill (Zoom) | Claude Code 101 webinar: reminder | 12:26 |\n| Nate Herk | Newsletter teaser from AI Automation Society | 15:04 |\n| Zomato | Promo: order food instead of cooking | 11:43 |",
+      unread: true,
+      createdAt: at(90),
+      approval: null,
+      approvalState: null,
+    },
+    {
+      ...base,
+      id: "sample-failed",
+      kind: "task_failed" as const,
+      title: "Run failed",
+      body: "GitHub isn't connected yet",
+      unread: false,
+      createdAt: at(60 * 26),
+      approval: null,
+      approvalState: null,
+    },
+  ];
+};
