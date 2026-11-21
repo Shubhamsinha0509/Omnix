@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Bot, House, Inbox, Plug, Plus, Settings, Store } from "lucide-react";
 
 import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -60,6 +61,8 @@ export function SearchCommand({ agents }: { agents: SidebarAgent[] }) {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} title="Search" description="Find an agent or a page">
+      {/* cmdk's input and list must sit inside a <Command> root; this dialog doesn't add one. */}
+      <Command>
       <CommandInput placeholder="Search agents and pages…" />
       <CommandList>
         <CommandEmpty>Nothing matches that.</CommandEmpty>
@@ -88,6 +91,7 @@ export function SearchCommand({ agents }: { agents: SidebarAgent[] }) {
           ))}
         </CommandGroup>
       </CommandList>
+      </Command>
     </CommandDialog>
   );
 }
