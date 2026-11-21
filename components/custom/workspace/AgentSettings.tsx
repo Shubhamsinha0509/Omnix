@@ -83,7 +83,7 @@ export default function AgentSettings({ agent, conversationCount, tools, connect
 
       <Separator className="my-10" />
 
-      <AgentTools agentId={agent.id} tools={tools} connections={connections} />
+      <AgentTools agentId={agent.id} agentName={agent.name} tools={tools} connections={connections} />
 
       <Separator className="my-10" />
 

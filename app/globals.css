@@ -272,8 +272,10 @@
 /* Glass for floating surfaces: drawer, popovers, profile menu */
 @utility glass {
   background: var(--popover);
-  backdrop-filter: blur(20px) saturate(1.4);
+  /* Prefixed first: the CSS compiler keeps only the last of the pair, and Chromium needs the
+     unprefixed one (it emits the -webkit- copy for Safari itself). */
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid rgb(255 255 255 / 0.6);
 }
 .dark .glass { border-color: rgb(255 255 255 / 0.08); }

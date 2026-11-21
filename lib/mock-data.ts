@@ -17,3 +17,13 @@ export const MOCK_USAGE: UsageSummary = {
   plan: "Free",
   tokensUsedPercent: 12,
 };
+
+/**
+ * Per-agent settings shown in the drawer's Settings tab that nothing reads yet.
+ * TODO(backend): Isolated VM is Phase 6 (E2B, docs/06-vms.md); "remember past chats"
+ * needs cross-conversation context in the runner. Shown disabled until then.
+ */
+export const MOCK_AGENT_SETTINGS = {
+  isolatedVm: true,
+  rememberPastChats: false,
+};

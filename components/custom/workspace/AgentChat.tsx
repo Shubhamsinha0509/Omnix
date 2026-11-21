@@ -7,12 +7,11 @@ import { formatDistanceToNow } from "date-fns";
 import {
   ArrowUp,
   Check,
-  Clock,
-  Globe,
+  ChevronRight,
+  Copy,
   History,
   Loader2,
-  Mail,
-  Search,
+  Paperclip,
   Settings,
   SquarePen,
   Square,
@@ -29,7 +28,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Textarea } from "@/components/ui/textarea";
 import { Trace, TraceDescription, TraceIcon, TraceLine, TraceTitle } from "@/components/ui/trace";
 import {
   createEventParser,
@@ -38,13 +36,17 @@ import {
   type ApprovalRequest,
 } from "@/lib/agent/events";
 import type { ConversationSummary } from "@/lib/agents";
+import { ModelChip, SuggestionChip } from "@/components/custom/design/Chips";
+import { HeroWash } from "@/components/custom/design/HeroWash";
+import { TOOL_ICONS } from "@/components/custom/design/ToolPermissionRow";
+import { cn } from "@/lib/utils";
 import { AgentAvatar } from "./AgentAvatar";
-import AgentConfigPanel, { type AgentConfig } from "./AgentConfigPanel";
+import AgentConfigPanel, { type AgentConfig, type ConfigTab } from "./AgentConfigPanel";
 import { ApprovalCard } from "./ApprovalCard";
 import { Markdown } from "./Markdown";
 
-/** Width at which the configuration panel fits beside the chat; below it, it overlays. */
-const PANEL_BREAKPOINT = "(min-width: 1280px)";
+/** Prompts offered in an empty chat (05-chat-empty). */
+const SUGGESTIONS = ["Summarize my unread email", "Find emails from Outskill", "What can you do?"];
 
 export type ChatMessage = {
   id: string;
@@ -64,17 +66,6 @@ export type ChatMessage = {
   approvalState?: "pending" | "deciding" | ApprovalDecision;
 };
 
-/** A tool's icon in the activity list. Anything new falls back to a spanner. */
-const TOOL_ICONS: Record<string, typeof Wrench> = {
-  "web.search": Search,
-  "web.fetch": Globe,
-  "time.now": Clock,
-  "gmail.search": Mail,
-  "gmail.read": Mail,
-  "gmail.create_draft": Mail,
-  "gmail.send": Mail,
-};
-
 type Props = {
   agent: { id: string; name: string; avatarSeed: string; instructions: string };
   conversations: ConversationSummary[];
@@ -85,6 +76,10 @@ type Props = {
   aiReady: boolean;
   /** What the configuration panel beside the chat needs: tools, accounts, chat count. */
   config: AgentConfig;
+  /** From Home's composer (`?prompt=`): sent as the first message of a new chat. */
+  initialPrompt?: string | null;
+  /** `?configure=instructions`: open the drawer on that tab. */
+  initialTab?: ConfigTab | null;
 };
 
 /**
@@ -116,18 +111,20 @@ export default function AgentChat({
   initialApprovals,
   aiReady,
   config,
+  initialPrompt = null,
+  initialTab = null,
 }: Props) {
   const router = useRouter();
-  /**
-   * The configuration panel. "auto" (the start) shows it where it fits beside the chat
-   * and hides it on narrower screens — decided in CSS, so server and browser agree.
-   * Once the user toggles it, their choice wins.
-   */
-  const [panel, setPanel] = useState<"auto" | "open" | "closed">("auto");
-  const togglePanel = () => {
-    const visible = panel === "open" || (panel === "auto" && window.matchMedia(PANEL_BREAKPOINT).matches);
-    setPanel(visible ? "closed" : "open");
+  /** The configuration drawer: closed to start (05/06), open on a tab (07–10). */
+  const [panelOpen, setPanelOpen] = useState(initialTab !== null);
+  const [panelTab, setPanelTab] = useState<ConfigTab>(initialTab ?? "instructions");
+  const openPanel = (tab?: ConfigTab) => {
+    if (tab) setPanelTab(tab);
+    setPanelOpen(true);
   };
+  /** Which replies have their tool steps expanded. */
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [copied, setCopied] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState(initialConversationId);
   const [chat, setChat] = useState<ChatMessage[]>(() => withApprovals(initialMessages, initialApprovals));
   const [input, setInput] = useState("");
@@ -259,9 +256,9 @@ export default function AgentChat({
       ),
     );
 
-  const send = async (event?: FormEvent) => {
+  const send = async (event?: FormEvent, override?: string) => {
     event?.preventDefault();
-    const text = input.trim();
+    const text = (override ?? input).trim();
     if (!text || isStreaming) return;
 
     const replyId = crypto.randomUUID();
@@ -388,6 +385,32 @@ export default function AgentChat({
     }
   };
 
+  /**
+   * A prompt from Home's composer: sent once as this new chat's first message, then dropped
+   * from the address bar so a reload doesn't send it again. The timer (cleared on unmount)
+   * keeps React's development double-mount from starting it twice or aborting it.
+   */
+  useEffect(() => {
+    if (!initialPrompt) return;
+    const timer = window.setTimeout(() => {
+      window.history.replaceState(null, "", `/workspace/agent/${agent.id}`);
+      void send(undefined, initialPrompt);
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // Once per page load, with the prompt the page arrived with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const copyReply = async (message: ChatMessage) => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(message.id);
+      window.setTimeout(() => setCopied((current) => (current === message.id ? null : current)), 1500);
+    } catch {
+      // Clipboard blocked (permissions, insecure context): nothing useful to show.
+    }
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter sends, Shift+Enter adds a new line.
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -396,182 +419,233 @@ export default function AgentChat({
     }
   };
 
+  const empty = chat.length === 0;
+  const gmailOn = config.tools.some((tool) => tool.provider === "gmail" && tool.enabled);
+
   return (
-    <div className="flex h-svh">
-      <div className="flex min-w-0 flex-1 flex-col">
-      {/* Header */}
-      <header className="flex items-center gap-3 border-b px-6 py-3">
-        <div className="size-9 shrink-0">
-          <AgentAvatar seed={agent.avatarSeed} name={agent.name} />
-        </div>
-        <h1 className="min-w-0 flex-1 truncate font-semibold">{agent.name}</h1>
+    <div className="relative flex h-[calc(100svh-3.5rem)] md:h-svh">
+      <section aria-label={`Chat with ${agent.name}`} className="flex min-w-0 flex-1 flex-col">
+        {/* Header (05/06): avatar, name, model, chats, new chat, configuration */}
+        <header className="flex h-16 shrink-0 items-center gap-3 border-b px-4 md:px-6">
+          <span className="size-8 shrink-0">
+            <AgentAvatar seed={agent.avatarSeed} name="" />
+          </span>
+          <h1 className="min-w-0 flex-1 truncate font-sans text-h3 font-semibold tracking-normal">
+            {agent.name}
+          </h1>
+          <span title={config.model.id} className="hidden md:inline-flex">
+            <ModelChip label={config.model.label} />
+          </span>
 
-        {conversations.length > 0 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="sm">
-                  <History />
-                  Chats
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="w-72 min-w-72">
-              {/* Base UI requires a menu label to sit inside a group. */}
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Past chats</DropdownMenuLabel>
-                {conversations.map((chatItem) => (
-                  <DropdownMenuItem
-                    key={chatItem.id}
-                    render={<Link href={`/workspace/agent/${agent.id}?c=${chatItem.id}`} />}
-                    onClick={() => openChat(chatItem.id)}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{chatItem.title}</span>
-                    {chatItem.id === conversationId ? (
-                      <Check className="text-muted-foreground" />
-                    ) : (
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(chatItem.updatedAt), { addSuffix: true })}
-                      </span>
-                    )}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+          {conversations.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" size="sm" className="max-md:size-10 max-md:px-0" aria-label="Chats">
+                    <History />
+                    <span className="hidden md:inline">Chats</span>
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-72 min-w-72">
+                {/* Base UI requires a menu label to sit inside a group. */}
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="px-3 py-1.5 text-caption">Past chats</DropdownMenuLabel>
+                  {conversations.map((chatItem) => (
+                    <DropdownMenuItem
+                      key={chatItem.id}
+                      render={<Link href={`/workspace/agent/${agent.id}?c=${chatItem.id}`} />}
+                      onClick={() => openChat(chatItem.id)}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{chatItem.title}</span>
+                      {chatItem.id === conversationId ? (
+                        <Check />
+                      ) : (
+                        <span className="shrink-0 text-caption text-muted-foreground">
+                          {formatDistanceToNow(new Date(chatItem.updatedAt), { addSuffix: true })}
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
-        <Button variant="outline" size="sm" onClick={newChat} disabled={chat.length === 0}>
-          <SquarePen />
-          New chat
-        </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={newChat}
+            disabled={empty}
+            aria-label="New chat"
+            className="max-md:size-10 max-md:px-0"
+          >
+            <SquarePen />
+            <span className="hidden md:inline">New chat</span>
+          </Button>
 
-        <Button
-          variant={panel === "open" ? "secondary" : "ghost"}
-          size="icon"
-          aria-label="Agent configuration"
-          title="Agent configuration"
-          onClick={togglePanel}
-        >
-          <Settings />
-        </Button>
-      </header>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Agent configuration"
+            aria-expanded={panelOpen}
+            onClick={() => setPanelOpen((open) => !open)}
+            className={cn(panelOpen && "bg-accent text-brand hover:bg-accent hover:text-brand")}
+          >
+            <Settings />
+          </Button>
+        </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-8">
-          {chat.length === 0 && (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <div className="size-16">
-                <AgentAvatar seed={agent.avatarSeed} name={agent.name} />
-              </div>
-              <h2 className="text-lg font-semibold">Chat with {agent.name}</h2>
-              <p className="max-w-md text-sm text-muted-foreground line-clamp-3">
-                {agent.instructions || "Ask anything to get started."}
+        {/* Messages */}
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {empty ? (
+            <div className="relative flex flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
+              <HeroWash className="top-0 h-full" />
+              <span className="relative size-20">
+                <AgentAvatar seed={agent.avatarSeed} name="" />
+              </span>
+              <h2 className="relative font-display text-[32px] leading-9 font-semibold tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
+                Chat with {agent.name}
+              </h2>
+              <p className="relative line-clamp-3 max-w-[520px] text-body-l text-muted-foreground">
+                {agent.instructions.trim()
+                  ? agent.instructions
+                  : `${agent.name} has no instructions yet, so it works as a general assistant${gmailOn ? " with Gmail access" : ""}.`}
               </p>
+              {!agent.instructions.trim() && (
+                <Button variant="outline" className="relative" onClick={() => openPanel("instructions")}>
+                  Add instructions
+                </Button>
+              )}
+              <div className="relative flex flex-wrap justify-center gap-2 pt-4">
+                {SUGGESTIONS.map((suggestion) => (
+                  <SuggestionChip
+                    key={suggestion}
+                    disabled={isStreaming || !aiReady}
+                    onClick={() => void send(undefined, suggestion)}
+                  >
+                    {suggestion}
+                  </SuggestionChip>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto flex w-full max-w-[840px] flex-col gap-6 px-4 py-6 md:px-8">
+              {chat.map((message) =>
+                message.role === "user" ? (
+                  <div key={message.id} className="flex justify-end">
+                    <p className="max-w-[85%] rounded-[20px_20px_8px_20px] bg-primary px-4 py-2.5 whitespace-pre-wrap text-primary-foreground md:max-w-[70%]">
+                      {message.content}
+                    </p>
+                  </div>
+                ) : (
+                  <div key={message.id} className="flex items-start gap-3">
+                    <span className="size-8 shrink-0">
+                      <AgentAvatar seed={agent.avatarSeed} name="" />
+                    </span>
+                    <div className="flex min-w-0 flex-1 flex-col gap-3">
+                      {message.activity && message.activity.length > 0 && (
+                        <ToolUse
+                          activity={message.activity}
+                          open={expanded.has(message.id)}
+                          onToggle={() =>
+                            setExpanded((current) => {
+                              const next = new Set(current);
+                              if (next.has(message.id)) next.delete(message.id);
+                              else next.add(message.id);
+                              return next;
+                            })
+                          }
+                        />
+                      )}
+
+                      {message.content ? (
+                        <Markdown content={message.content} />
+                      ) : (
+                        message.pending &&
+                        !message.activity?.length &&
+                        !message.approval && (
+                          <span className="inline-flex items-center gap-2 text-muted-foreground">
+                            <Loader2 className="size-4 animate-spin" />
+                            Thinking…
+                          </span>
+                        )
+                      )}
+
+                      {message.notes?.map((note, index) => (
+                        <p key={index} className="text-body-s text-muted-foreground italic">
+                          {note}
+                        </p>
+                      ))}
+
+                      {message.approval && (
+                        <ApprovalCard
+                          request={message.approval}
+                          state={message.approvalState ?? "pending"}
+                          busy={isStreaming}
+                          onDecide={(decision) => void decide(message, decision)}
+                        />
+                      )}
+
+                      {message.content && !message.pending && (
+                        <div className="flex gap-1 text-muted-foreground">
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={copied === message.id ? "Copied" : "Copy reply"}
+                            onClick={() => void copyReply(message)}
+                          >
+                            {copied === message.id ? <Check className="size-4" /> : <Copy className="size-4" />}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ),
+              )}
+              <div ref={bottomRef} />
             </div>
           )}
-
-          {chat.map((message) =>
-            message.role === "user" ? (
-              <div key={message.id} className="flex justify-end">
-                <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm whitespace-pre-wrap text-primary-foreground">
-                  {message.content}
-                </div>
-              </div>
-            ) : (
-              <div key={message.id} className="flex gap-3">
-                <div className="mt-0.5 size-7 shrink-0">
-                  <AgentAvatar seed={agent.avatarSeed} name={agent.name} />
-                </div>
-                <div className="min-w-0 flex-1 pt-1">
-                  {message.activity && message.activity.length > 0 && (
-                    <Trace className="mb-3">
-                      {message.activity.map((item) => {
-                        const Icon = TOOL_ICONS[item.tool] ?? Wrench;
-                        return (
-                          <TraceLine
-                            key={item.id}
-                            status={item.status === "done" ? undefined : item.status}
-                          >
-                            <TraceIcon>
-                              {item.status === "running" ? (
-                                <Loader2 className="animate-spin" />
-                              ) : item.status === "error" ? (
-                                <TriangleAlert />
-                              ) : (
-                                <Icon />
-                              )}
-                            </TraceIcon>
-                            <TraceTitle>{item.label}</TraceTitle>
-                            {item.detail && <TraceDescription>{item.detail}</TraceDescription>}
-                          </TraceLine>
-                        );
-                      })}
-                    </Trace>
-                  )}
-
-                  {message.content ? (
-                    <Markdown content={message.content} />
-                  ) : (
-                    message.pending &&
-                    !message.activity?.length &&
-                    !message.approval && (
-                      <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin" />
-                        Thinking...
-                      </span>
-                    )
-                  )}
-
-                  {message.notes?.map((note, index) => (
-                    <p key={index} className="mt-2 text-sm text-muted-foreground italic">
-                      {note}
-                    </p>
-                  ))}
-
-                  {message.approval && (
-                    <ApprovalCard
-                      request={message.approval}
-                      state={message.approvalState ?? "pending"}
-                      busy={isStreaming}
-                      onDecide={(decision) => void decide(message, decision)}
-                    />
-                  )}
-                </div>
-              </div>
-            ),
-          )}
-          <div ref={bottomRef} />
         </div>
-      </div>
 
-      {/* Input */}
-      <div className="border-t bg-background px-6 py-4">
-        <div className="mx-auto w-full max-w-3xl">
+        {/* Composer */}
+        <div className="flex shrink-0 flex-col items-center gap-2 px-4 pt-3 pb-5 md:px-6">
           {!aiReady && (
-            <p className="mb-3 flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+            <p className="flex w-full max-w-[780px] items-center gap-2 rounded-md bg-warning-subtle px-3 py-2 text-body-s text-warning-text">
               <TriangleAlert className="size-4 shrink-0" />
               AI isn&apos;t set up yet: add OPENROUTER_API_KEY to .env and restart the dev server.
             </p>
           )}
           {error && (
-            <p role="alert" className="mb-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p role="alert" className="w-full max-w-[780px] rounded-md bg-destructive/10 px-3 py-2 text-body-s text-destructive">
               {error}
             </p>
           )}
           <form
             onSubmit={send}
-            className="flex items-end gap-2 rounded-2xl border bg-background p-2 focus-within:ring-3 focus-within:ring-ring/50"
+            className="flex w-full max-w-[780px] items-end gap-3 rounded-xl border border-input bg-card py-2 pr-2 pl-4 shadow-sm focus-within:border-ring"
           >
-            <Textarea
+            {/* TODO(backend): attachments — the chat API takes text only for now. */}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Attach a file"
+              title="Attachments are coming soon"
+              disabled
+              className="mb-1"
+            >
+              <Paperclip />
+            </Button>
+            <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder={`Message ${agent.name}...`}
+              placeholder={`Message ${agent.name}…`}
+              aria-label={`Message ${agent.name}`}
               rows={1}
               maxLength={8000}
-              className="max-h-48 min-h-9 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
+              className="field-sizing-content max-h-48 min-h-10 flex-1 resize-none bg-transparent py-2 text-body text-foreground outline-none placeholder:text-muted-foreground focus-visible:shadow-none!"
             />
             {isStreaming ? (
               <Button
@@ -584,36 +658,118 @@ export default function AgentChat({
                 <Square className="size-3.5 fill-current" />
               </Button>
             ) : (
-              <Button type="submit" size="icon" disabled={!input.trim()} aria-label="Send message">
+              <Button type="submit" variant="brand" size="icon" disabled={!input.trim()} aria-label="Send">
                 <ArrowUp />
               </Button>
             )}
           </form>
-          <p className="mt-2 text-center text-xs text-muted-foreground">
+          <p className="hidden text-caption font-medium text-muted-foreground md:block">
             Enter to send · Shift + Enter for a new line
           </p>
         </div>
-      </div>
-      </div>
+      </section>
 
-      {/* Agent configuration: beside the chat where it fits, over it on narrower screens. */}
-      <aside
-        aria-label="Agent configuration"
-        className={[
-          "w-[380px] max-w-full shrink-0 flex-col border-l bg-background",
-          panel === "closed" && "hidden",
-          panel === "auto" && "hidden xl:flex",
-          panel === "open" && "fixed inset-y-0 right-0 z-30 flex shadow-2xl xl:static xl:z-auto xl:shadow-none",
-        ]
-          .filter(Boolean)
-          .join(" ")}
+      {/* Configuration drawer (07–10): beside the chat on wide screens, over it below 1280px. */}
+      {panelOpen && (
+        <aside
+          aria-label="Agent configuration"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setPanelOpen(false);
+          }}
+          className="glass absolute inset-0 z-30 flex flex-col overflow-hidden p-5 shadow-lg md:inset-y-3 md:right-3 md:left-auto md:w-[400px] md:rounded-xl xl:static xl:my-3 xl:mr-3 xl:shrink-0"
+        >
+          <AgentConfigPanel
+            agent={agent}
+            {...config}
+            tab={panelTab}
+            onTabChange={setPanelTab}
+            onClose={() => setPanelOpen(false)}
+          />
+        </aside>
+      )}
+    </div>
+  );
+}
+
+/** "Used gmail.search and gmail.read ×5": each tool once, repeats counted, in first-use order. */
+function summarize(activity: Activity[]) {
+  const counts = new Map<string, number>();
+  for (const item of activity) counts.set(item.tool, (counts.get(item.tool) ?? 0) + 1);
+  return [...counts].map(([tool, count]) => (count > 1 ? `${tool} ×${count}` : tool));
+}
+
+/**
+ * The tools behind a reply, as one pill (06-chat-messages) that opens into the step-by-step
+ * trace. While a tool is still running the pill says which, with a spinner.
+ */
+function ToolUse({
+  activity,
+  open,
+  onToggle,
+}: {
+  activity: Activity[];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const running = activity.find((item) => item.status === "running");
+  const failed = activity.some((item) => item.status === "error");
+  const names = summarize(activity);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="inline-flex max-w-full cursor-pointer items-center gap-2 self-start rounded-full bg-muted px-3 py-1.5 text-left text-body-s text-muted-foreground hover:text-foreground"
       >
-        <AgentConfigPanel
-          agent={agent}
-          {...config}
-          onClose={() => setPanel("closed")}
-        />
-      </aside>
+        {running ? (
+          <Loader2 className="size-3.5 shrink-0 animate-spin" />
+        ) : failed ? (
+          <TriangleAlert className="size-3.5 shrink-0 text-destructive" />
+        ) : (
+          <Wrench className="size-3.5 shrink-0" />
+        )}
+        <span className="min-w-0">
+          {running ? (
+            `${running.label}…`
+          ) : (
+            <>
+              Used{" "}
+              {names.map((name, index) => (
+                <span key={name}>
+                  {index > 0 && (index === names.length - 1 ? " and " : ", ")}
+                  <span className="font-mono text-caption text-foreground">{name}</span>
+                </span>
+              ))}
+            </>
+          )}
+        </span>
+        <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
+      </button>
+
+      {open && (
+        <Trace className="ms-1">
+          {activity.map((item) => {
+            const Icon = TOOL_ICONS[item.tool] ?? Wrench;
+            return (
+              <TraceLine key={item.id} status={item.status === "done" ? undefined : item.status}>
+                <TraceIcon>
+                  {item.status === "running" ? (
+                    <Loader2 className="animate-spin" />
+                  ) : item.status === "error" ? (
+                    <TriangleAlert />
+                  ) : (
+                    <Icon />
+                  )}
+                </TraceIcon>
+                <TraceTitle>{item.label}</TraceTitle>
+                {item.detail && <TraceDescription>{item.detail}</TraceDescription>}
+              </TraceLine>
+            );
+          })}
+        </Trace>
+      )}
     </div>
   );
 }

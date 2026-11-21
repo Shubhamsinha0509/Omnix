@@ -21,8 +21,11 @@ function textOf(node: ReactNode): string {
   return "";
 }
 
-/** Columns that differ between two copies of the same thread, so they don't count. */
-const VOLATILE_COLUMN = /\b(time|date|when|received|sent|at)\b/i;
+/**
+ * Columns that differ between two copies of the same thread — row numbers ("#") and times —
+ * so they don't count when comparing rows.
+ */
+const VOLATILE_COLUMN = /^\s*(#|no\.?)\s*$|\b(time|date|when|received|sent|at)\b/i;
 
 /**
  * A table in an agent's reply (`.tblbox` in 06-chat-messages).

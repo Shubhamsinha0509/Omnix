@@ -4,7 +4,9 @@ import { and, asc, eq } from "drizzle-orm";
 import AgentChat from "@/components/custom/workspace/AgentChat";
 import { conversations, db, messages } from "@/db";
 import { listPendingForConversation } from "@/lib/agent/approvals";
-import { hasModelKey } from "@/lib/ai";
+import { CHAT_MODEL, hasModelKey } from "@/lib/ai";
+import { modelLabel } from "@/lib/format";
+import type { ConfigTab } from "@/components/custom/workspace/AgentConfigPanel";
 import { TOOLS, listToolSettings } from "@/lib/tools";
 import { listConnections } from "@/lib/integrations/connections";
 import { UUID_PATTERN, getOwnedAgent, listConversations } from "@/lib/agents";
@@ -13,13 +15,20 @@ import { listTasks, toTaskView } from "@/lib/tasks";
 
 type Props = {
   params: Promise<{ id: string }>;
-  /** `?c=<conversation id>` opens a past chat; without it, the most recent one. */
-  searchParams: Promise<{ c?: string }>;
+  /**
+   * `?c=<conversation id>` opens a past chat; without it, the most recent one.
+   * `?new=1&prompt=…` (from Home) starts a new chat and sends the prompt.
+   * `?configure=<tab>` opens the configuration drawer on that tab.
+   */
+  searchParams: Promise<{ c?: string; new?: string; prompt?: string; configure?: string }>;
 };
 
 export default async function AgentPage({ params, searchParams }: Props) {
   const { id } = await params;
-  const { c: requested } = await searchParams;
+  const { c: requested, new: fresh, prompt, configure } = await searchParams;
+  const TABS: ConfigTab[] = ["instructions", "tools", "schedule", "settings"];
+  const initialTab = TABS.find((tab) => tab === configure) ?? null;
+  const initialPrompt = prompt?.trim().slice(0, 8000) || null;
 
   const user = await getCurrentUser();
   if (!user) notFound();
@@ -53,7 +62,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
       .limit(1);
     if (!found) notFound();
     activeId = found.id;
-  } else {
+  } else if (!fresh && !initialPrompt) {
     activeId = chats[0]?.id ?? null;
   }
 
@@ -94,7 +103,15 @@ export default async function AgentPage({ params, searchParams }: Props) {
         resumable: approval.resumable,
       }))}
       aiReady={hasModelKey()}
-      config={{ tools, connections, conversationCount: chats.length, tasks: tasks.map(toTaskView) }}
+      config={{
+        tools,
+        connections,
+        conversationCount: chats.length,
+        tasks: tasks.map(toTaskView),
+        model: { id: CHAT_MODEL, label: modelLabel(CHAT_MODEL) },
+      }}
+      initialPrompt={initialPrompt}
+      initialTab={initialTab}
     />
   );
 }

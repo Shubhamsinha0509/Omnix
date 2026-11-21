@@ -8,7 +8,16 @@ import { cn } from "@/lib/utils";
  * The model in use, as a pill (`.pill` with a green dot): "Auto · balanced". Agents use
  * the model the server is configured with (lib/ai.ts), so this reads rather than picks.
  */
-export function ModelChip({ label, className }: { label: string; className?: string }) {
+export function ModelChip({
+  label,
+  className,
+  dot = true,
+}: {
+  label: string;
+  className?: string;
+  /** The green "available" dot; the Settings tab shows the pill without it. */
+  dot?: boolean;
+}) {
   return (
     <span
       title="The model this agent uses"
@@ -17,7 +26,7 @@ export function ModelChip({ label, className }: { label: string; className?: str
         className,
       )}
     >
-      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-success" />
+      {dot && <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-success" />}
       {label}
       <ChevronDown className="size-3.5 text-muted-foreground" aria-hidden="true" />
     </span>

@@ -305,7 +305,7 @@ type FormProps = {
 };
 
 /** The presets the form offers. "Custom" hands over the cron expression itself. */
-type Preset = "daily" | "weekdays" | "weekly" | "hourly" | "quarter" | "custom";
+export type Preset = "daily" | "weekdays" | "weekly" | "hourly" | "quarter" | "custom";
 
 function TaskForm({ agentId, task, compact, onSaved, onDone, onError }: FormProps) {
   const initial = task?.schedule ?? DEFAULT_SCHEDULE;
@@ -557,7 +557,7 @@ const clamp = (value: number, min: number, max: number) =>
   Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
 
 /** The preset and its settings as a cron expression. */
-function toCron(preset: Preset, time: string, weekday: number) {
+export function toCron(preset: Preset, time: string, weekday: number) {
   const [hour, minute] = time.split(":").map((part) => clamp(Number(part), 0, 59));
   switch (preset) {
     case "daily":
@@ -576,7 +576,7 @@ function toCron(preset: Preset, time: string, weekday: number) {
 }
 
 /** An existing expression back into the form's controls, or "custom" if it isn't one of them. */
-function fromCron(expression: string): { preset: Preset; time: string; weekday: number } {
+export function fromCron(expression: string): { preset: Preset; time: string; weekday: number } {
   const fallback = { preset: "custom" as Preset, time: "09:00", weekday: 1 };
   const [minute, hour, dayOfMonth, month, dayOfWeek] = expression.trim().split(/\s+/);
   if (!dayOfWeek || dayOfMonth !== "*" || month !== "*") return fallback;
@@ -601,7 +601,7 @@ function fromCron(expression: string): { preset: Preset; time: string; weekday: 
 }
 
 /** An instant as the clock reads it in the task's timezone. */
-function formatIn(instant: Date, timezone: string) {
+export function formatIn(instant: Date, timezone: string) {
   try {
     return new Intl.DateTimeFormat("en-GB", {
       timeZone: timezone,
