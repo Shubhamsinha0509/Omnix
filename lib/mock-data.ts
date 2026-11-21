@@ -235,3 +235,9 @@ export const MOCK_NOTIFICATION_PREFS = [
   { key: "failures", title: "Failed runs", note: "Email me when a scheduled run fails.", on: true },
   { key: "weekly", title: "Weekly summary", note: "What your agents did this week.", on: false },
 ];
+
+/**
+ * Workspaces: a sidebar entry in the redesign with no screen or backend yet.
+ * TODO(backend): shared workspaces (Omnix is single-user today, decision D-individuals).
+ */
+export const MOCK_WORKSPACES = [{ key: "personal", name: "Personal", note: "Just you" }];
