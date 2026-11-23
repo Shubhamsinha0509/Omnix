@@ -1,4 +1,5 @@
 import { purgeStepPayloadsBefore } from "@/lib/agent/runs";
+import { purgeSharedFilesBefore } from "@/lib/files";
 import { purgeNotificationsBefore } from "@/lib/notifications";
 import { inngest } from "./client";
 
@@ -36,6 +37,11 @@ export const retentionSweep = inngest.createFunction(
       purgeNotificationsBefore(new Date(Date.now() - RETENTION.notificationDays * DAY_MS)),
     );
 
-    return { stepPayloadsCleared: steps, notificationsDeleted: notifications };
+    // Files agents shared from their VMs are run contents too: same window as the steps.
+    const files = await step.run("purge-shared-files", () =>
+      purgeSharedFilesBefore(new Date(Date.now() - RETENTION.stepPayloadDays * DAY_MS)),
+    );
+
+    return { stepPayloadsCleared: steps, notificationsDeleted: notifications, sharedFilesDeleted: files };
   },
 );

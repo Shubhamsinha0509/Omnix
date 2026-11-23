@@ -3,6 +3,8 @@
 import { isValidElement, memo, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { FileDown } from "lucide-react";
+import { isFileHref } from "@/lib/file-links";
 import { cn } from "@/lib/utils";
 
 import {
@@ -70,16 +72,27 @@ const components: Components = {
   li: ({ children }) => <li className="[&>p]:my-0">{children}</li>,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
-  a: ({ children, href }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer nofollow"
-      className="font-medium text-brand-text hover:underline"
-    >
-      {children}
-    </a>
-  ),
+  a: ({ children, href }) =>
+    // A file the agent shared from its VM: drawn as a file to download, not a web link.
+    isFileHref(href) ? (
+      <a
+        href={href}
+        download
+        className="mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 align-middle text-body-s font-medium text-foreground no-underline shadow-xs hover:bg-muted"
+      >
+        <FileDown className="size-4 shrink-0 text-brand" />
+        <span className="truncate">{children}</span>
+      </a>
+    ) : (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer nofollow"
+        className="font-medium text-brand-text hover:underline"
+      >
+        {children}
+      </a>
+    ),
   blockquote: ({ children }) => (
     <blockquote className="my-3 border-s-2 ps-3 text-muted-foreground first:mt-0 last:mb-0">
       {children}

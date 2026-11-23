@@ -256,5 +256,6 @@ const TOOL_SUMMARIES: Record<string, string> = {
   "sandbox.write_file": "Save files in this agent's VM.",
   "sandbox.read_file": "Read files from this agent's VM.",
   "sandbox.list_files": "See what's in this agent's VM.",
+  "sandbox.share_file": "Hand you files from the VM (CSV, charts) as downloads.",
   "sandbox.open_browser": "Open pages in the VM's browser, on the live screen.",
 };

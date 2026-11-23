@@ -79,7 +79,7 @@ async function deliverEmail(input: DeliverInput, title: string, body: string): P
   const result = await sendEmail({
     to: input.user.email,
     subject: `${input.agent.name}: ${title}`,
-    text: `${body}\n\n—\n${input.agent.name} ran this for you in Omnix${runLink(input)}`,
+    text: `${withFullLinks(body)}\n\n—\n${input.agent.name} ran this for you in Omnix${runLink(input)}`,
   });
 
   return result.ok ? { channel: "email", ok: true } : { channel: "email", ok: false, detail: result.error };
@@ -92,6 +92,16 @@ function buildBody(input: DeliverInput) {
   if (!input.ok) parts.push(input.error?.trim() || "The run didn't finish and the agent gave no reply.");
   for (const note of input.notes ?? []) if (note.trim()) parts.push(note.trim());
   return parts.join("\n\n") || "The run finished without a reply.";
+}
+
+/**
+ * Files an agent shared are linked as `/api/files/…`, which works in the app but not in an
+ * email: there they need the app's own address in front. Without NEXT_PUBLIC_APP_URL they
+ * are left as they are; the in-app copy still works.
+ */
+function withFullLinks(body: string) {
+  const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, "");
+  return base ? body.replace(/\]\(\/api\/files\//g, `](${base}/api/files/`) : body;
 }
 
 function runLink(input: DeliverInput) {

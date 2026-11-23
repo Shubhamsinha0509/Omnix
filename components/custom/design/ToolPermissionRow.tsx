@@ -3,6 +3,7 @@
 import {
   AppWindow,
   Clock,
+  FileDown,
   FilePen,
   FileText,
   FolderOpen,
@@ -31,6 +32,7 @@ export const TOOL_ICONS: Record<string, LucideIcon> = {
   "sandbox.write_file": FilePen,
   "sandbox.read_file": FileText,
   "sandbox.list_files": FolderOpen,
+  "sandbox.share_file": FileDown,
   "sandbox.open_browser": AppWindow,
 };
 

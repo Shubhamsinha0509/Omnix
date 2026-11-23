@@ -72,7 +72,7 @@ async function main() {
     const { resolveAgentTools, TOOLS } = await import("@/lib/tools");
     const offered = (await resolveAgentTools(agent)).map((r) => r.tool.key);
     check("a new agent gets no VM tools", !offered.some((key) => key.startsWith("sandbox.")), offered);
-    check("all five are registered", ["run_code", "write_file", "read_file", "list_files", "open_browser"].every((k) => `sandbox.${k}` in TOOLS));
+    check("all six are registered", ["run_code", "write_file", "read_file", "list_files", "share_file", "open_browser"].every((k) => `sandbox.${k}` in TOOLS));
 
     if (!vmLib.hasSandboxKey()) {
       section("No E2B key");
@@ -145,10 +145,13 @@ async function main() {
 
       section("Agent tools in the VM (live)");
       const sandboxTools = await import("@/lib/tools/sandbox");
+      const { runs } = await import("@/db");
+      // A real run row: shared files are recorded against the run that shared them.
+      const [testRun] = await db.insert(runs).values({ agentId: agent.id, userId: user.id, trigger: "chat" }).returning();
       const ctx = {
         user,
         agent,
-        runId: crypto.randomUUID(),
+        runId: testRun.id,
         timezone: "UTC",
         signal: new AbortController().signal,
         auth: null,
@@ -202,6 +205,29 @@ async function main() {
         "our scratch folder is hidden",
         "output" in home && !(home.output as { entries: { name: string }[] }).entries.some((e) => e.name === ".omnix"),
       );
+      section("Sharing files out of the VM (live)");
+      const csv = "title,company\nFull stack developer,Acme\n";
+      await sandboxTools.sandboxWriteFile.execute(ctx, { path: "out/jobs.csv", content: csv });
+      const shared = await sandboxTools.sandboxShareFile.execute(ctx, { path: "out/jobs.csv", name: "new_jobs.csv" });
+      check("share_file returns a download link", "output" in shared && /^\[new_jobs\.csv\]\(\/api\/files\/[0-9a-f-]{36}\)$/.test((shared.output as { markdown: string }).markdown), shared);
+      const fileId = "output" in shared ? (shared.output as { link: string }).link.split("/").pop()! : "";
+      const files = await import("@/lib/files");
+      const stored = await files.getOwnedFile(user.id, fileId);
+      check("the file is stored byte for byte", stored?.data.toString("utf8") === csv);
+      check("as a CSV, named as asked", stored?.mimeType === "text/csv" && stored?.name === "new_jobs.csv", stored && { mime: stored.mimeType, name: stored.name });
+      check("nobody else can get it", (await files.getOwnedFile(user.id + 1_000_000, fileId)) === null);
+      try {
+        const anon = await fetch(`http://localhost:3000/api/files/${fileId}`);
+        check("the download link needs sign-in (404 without)", anon.status === 404, anon.status);
+      } catch {
+        console.log("       (dev server not running: skipped the HTTP check)");
+      }
+      await sandboxTools.sandboxRunCode.execute(ctx, { language: "bash", code: "head -c 6000000 /dev/zero > /home/user/big.bin" });
+      const big = await sandboxTools.sandboxShareFile.execute(ctx, { path: "big.bin" });
+      check("files over 5 MB are refused", "error" in big && big.error.includes("limit"), big);
+      const dir = await sandboxTools.sandboxShareFile.execute(ctx, { path: "out" });
+      check("folders are refused", "error" in dir, dir);
+
       const escape1 = await sandboxTools.sandboxReadFile.execute(ctx, { path: "/etc/passwd" });
       check("paths outside home are refused", "error" in escape1, escape1);
       const escape2 = await sandboxTools.sandboxReadFile.execute(ctx, { path: "../../etc/passwd" });

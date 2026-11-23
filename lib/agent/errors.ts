@@ -7,8 +7,28 @@ import { CHAT_MODEL } from "@/lib/ai";
  * Status codes are OpenRouter's: https://openrouter.ai/docs/api-reference/errors
  */
 export function friendlyModelError(error: unknown) {
-  if (error instanceof APIError) {
-    switch (error.status) {
+  const message = String((error as { message?: unknown })?.message ?? "");
+
+  // The free models' daily allowance, worth naming exactly: waiting a moment won't help.
+  if (/free-models-per-day/i.test(message)) {
+    return (
+      "The free model's daily limit on OpenRouter is used up. It resets each day; to keep going " +
+      "now, add credit at openrouter.ai/settings/credits."
+    );
+  }
+
+  // In a background task the error has been through Inngest's step storage as plain JSON
+  // and is no longer an APIError; its status survives at the start of the message
+  // ("429 Rate limit exceeded…"), so read it from there.
+  const status =
+    error instanceof APIError
+      ? error.status
+      : typeof (error as { status?: unknown })?.status === "number"
+        ? (error as { status: number }).status
+        : Number(/^(\d{3})\b/.exec(message)?.[1]) || undefined;
+
+  if (status !== undefined) {
+    switch (status) {
       case 400:
         return "OpenRouter rejected the request. The model may not support tool calling — check CHAT_MODEL in lib/ai.ts.";
       case 401:
@@ -29,7 +49,7 @@ export function friendlyModelError(error: unknown) {
       case 503:
         return `No provider is currently available for "${CHAT_MODEL}". Try again shortly, or switch CHAT_MODEL in lib/ai.ts.`;
       default:
-        return `OpenRouter returned an error (${error.status}). Please try again.`;
+        return `OpenRouter returned an error (${status}). Please try again.`;
     }
   }
   return "Something went wrong while generating a reply. Please try again.";

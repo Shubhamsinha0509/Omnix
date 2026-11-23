@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   index,
   integer,
   jsonb,
@@ -473,6 +474,42 @@ export const sandboxes = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index("sandboxes_user_idx").on(table.userId)],
+);
+
+/** Postgres `bytea`: raw bytes, read and written as a Node Buffer. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
+
+/**
+ * Files an agent handed back from its VM (`sandbox.share_file`): a CSV, a chart, a report.
+ * The VM is the agent's workspace; this is how something in it reaches the user, as a
+ * download link in the chat and the inbox. Kept in the database because they are small
+ * (capped in lib/files.ts) and there is no other storage; removed with the run's other
+ * contents after 30 days (D43), or with the agent.
+ */
+export const sharedFiles = pgTable(
+  "shared_files",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    // The run that shared it. Kept if the run row goes, so a delivered link still works.
+    runId: uuid("run_id").references(() => runs.id, { onDelete: "set null" }),
+    // The file's own name, for the download, e.g. "new_jobs.csv".
+    name: text("name").notNull(),
+    // Where it was in the VM, for the record.
+    sourcePath: text("source_path").notNull(),
+    mimeType: text("mime_type").notNull(),
+    size: integer("size").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("shared_files_user_created_idx").on(table.userId, table.createdAt)],
 );
 
 export type User = typeof users.$inferSelect;

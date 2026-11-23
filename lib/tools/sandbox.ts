@@ -1,6 +1,9 @@
 import path from "node:path";
 import { CommandExitError, type Sandbox } from "@e2b/desktop";
 
+import { db, sharedFiles } from "@/db";
+import { fileHref } from "@/lib/file-links";
+import { FILE_LIMITS, countRunFiles, mimeFor, safeName } from "@/lib/files";
 import { sandboxForTool } from "@/lib/sandbox";
 import type { ToolContext, ToolDefinition, ToolResult } from "./types";
 
@@ -119,9 +122,12 @@ export const sandboxRunCode: ToolDefinition = {
   description:
     "Run a short program in your own private Linux VM and get back what it printed. Use it to " +
     "calculate, analyse data, transform files, or test code. Languages: python (python3 with the " +
-    "standard library; pip install works) and bash. Files you save under /home/user stay " +
-    "between runs. The program can reach the internet. It runs for at most 90 seconds. Print " +
-    "the results you need: only stdout and stderr come back.",
+    "standard library; the `requests` package is NOT installed, so use urllib.request, or run " +
+    "`pip install` first) and bash. Files you save under /home/user stay between runs; create " +
+    "folders before writing into them. The program can reach the internet. It runs for at most " +
+    "90 seconds. Print the results you need: only stdout and stderr come back. Your other VM " +
+    "tools (sandbox.share_file, sandbox.write_file, …) are tool calls you make, not commands " +
+    "that exist inside the VM.",
   risk: "write",
   runsIn: "sandbox",
   untrustedOutput: true,
@@ -332,14 +338,99 @@ export const sandboxOpenBrowser: ToolDefinition = {
     await got.vm.open(url.toString());
     // Give the browser a moment to show the page, then report what it says it opened.
     await got.vm.wait(4_000);
+    // The browser's own window, by name: the focused one may be the agent's code terminal.
     let title: string | null = null;
     try {
-      title = await got.vm.getWindowTitle(await got.vm.getCurrentWindowId());
+      const windows = await got.vm.getApplicationWindows("firefox");
+      const latest = windows.at(-1) ?? (await got.vm.getCurrentWindowId());
+      title = await got.vm.getWindowTitle(latest);
     } catch {
-      // No window focused yet: still opening.
+      // No browser window yet: still opening.
     }
     return { output: { opened: url.toString(), windowTitle: title ?? "(still loading)" } };
   },
 };
 
-export const SANDBOX_TOOLS = [sandboxRunCode, sandboxWriteFile, sandboxReadFile, sandboxListFiles, sandboxOpenBrowser];
+/**
+ * Hands a file from the VM to the user: copied out and served as a download link that
+ * only they can open (`/api/files/[id]`). How a CSV, a chart or a report the agent made
+ * actually reaches someone — the chat and the inbox both show the link as a file.
+ */
+export const sandboxShareFile: ToolDefinition = {
+  key: "sandbox.share_file",
+  label: "Sharing a file from the VM",
+  description:
+    "Give the user a file from your VM (under /home/user) as a download: a CSV, a chart image, " +
+    "a report. Returns a Markdown link; put that link in your reply exactly as given, so the user " +
+    `can download the file. Up to ${FILE_LIMITS.maxBytes / 1024 / 1024} MB per file and ` +
+    `${FILE_LIMITS.maxPerRun} files per run. Save the file first (with code or sandbox.write_file).`,
+  risk: "read",
+  runsIn: "sandbox",
+  timeoutMs: VM_TOOL_TIMEOUT_MS,
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "The file in the VM, e.g. new_jobs.csv", maxLength: 500 },
+      name: {
+        type: "string",
+        description: "What the download should be called. Defaults to the file's own name.",
+        maxLength: 120,
+      },
+    },
+    required: ["path"],
+    additionalProperties: false,
+  },
+  async execute(ctx, args) {
+    const target = homePath(args.path);
+    if ("error" in target) return target;
+    if ((await countRunFiles(ctx.runId)) >= FILE_LIMITS.maxPerRun) {
+      return { error: `This run has already shared ${FILE_LIMITS.maxPerRun} files, the most it may.` };
+    }
+
+    const got = await vmFor(ctx);
+    if ("error" in got) return got;
+    if (!(await got.vm.files.exists(target.path))) return { error: `There is no file at ${target.path}.` };
+    // Size first, so a huge file is refused without being copied out.
+    const info = await got.vm.files.getInfo(target.path);
+    if (info.type === "dir") return { error: `${target.path} is a folder. Share one file at a time.` };
+    if (info.size > FILE_LIMITS.maxBytes) {
+      return { error: `${target.path} is ${(info.size / 1024 / 1024).toFixed(1)} MB; the limit is ${FILE_LIMITS.maxBytes / 1024 / 1024} MB.` };
+    }
+
+    const bytes = await got.vm.files.read(target.path, { format: "bytes" });
+    const name = safeName(typeof args.name === "string" && args.name.trim() ? args.name : target.path);
+    const [row] = await db
+      .insert(sharedFiles)
+      .values({
+        userId: ctx.user.id,
+        agentId: ctx.agent.id,
+        runId: ctx.runId,
+        name,
+        sourcePath: target.path,
+        mimeType: mimeFor(name),
+        size: bytes.byteLength,
+        data: Buffer.from(bytes),
+      })
+      .returning({ id: sharedFiles.id });
+
+    const href = fileHref(row.id);
+    return {
+      output: {
+        shared: name,
+        size: bytes.byteLength,
+        link: href,
+        markdown: `[${name}](${href})`,
+        note: "Put the markdown link in your reply as it is, so the user can download the file.",
+      },
+    };
+  },
+};
+
+export const SANDBOX_TOOLS = [
+  sandboxRunCode,
+  sandboxWriteFile,
+  sandboxReadFile,
+  sandboxListFiles,
+  sandboxShareFile,
+  sandboxOpenBrowser,
+];
