@@ -265,8 +265,9 @@ export async function pauseSandbox(userId: number, agentId: string): Promise<San
     }
     console.error("Failed to pause the VM:", error);
     // It is still running: put the record back so the user can try again.
-    await save(userId, agentId, { status: "running", error: "Couldn't pause the VM. Please try again." });
-    return { error: "Couldn't pause the VM. Please try again." };
+    // Shown to the user, who knows this action as "Stop".
+    await save(userId, agentId, { status: "running", error: "Couldn't stop the VM. Please try again." });
+    return { error: "Couldn't stop the VM. Please try again." };
   }
 }
 
@@ -295,8 +296,9 @@ export async function stopSandbox(userId: number, agentId: string): Promise<Sand
     return { vm: toView(saved) };
   } catch (error) {
     console.error("Failed to stop the VM:", error);
-    await save(userId, agentId, { status: row.status, error: "Couldn't stop the VM. Please try again." });
-    return { error: "Couldn't stop the VM. Please try again." };
+    // Shown to the user, who knows this action as "Delete VM".
+    await save(userId, agentId, { status: row.status, error: "Couldn't delete the VM. Please try again." });
+    return { error: "Couldn't delete the VM. Please try again." };
   }
 }
 
@@ -341,6 +343,64 @@ export async function sandboxForTool(
   } catch (error) {
     console.error("Couldn't connect to the VM for a tool call:", error);
     return { error: "Couldn't reach the VM. Please try again." };
+  }
+}
+
+/** A running VM's size and how much of it is in use, as the VM card shows it. */
+export type SandboxStats = {
+  cpuCount: number;
+  /** Percent of all CPUs, or null before E2B has a first sample. */
+  cpuUsedPct: number | null;
+  memoryUsedMB: number | null;
+  memoryTotalMB: number;
+  diskUsedMB: number | null;
+  diskTotalMB: number | null;
+};
+
+const MB = 1024 * 1024;
+
+/**
+ * The running VM's CPU, memory and disk, from E2B's metrics (the newest sample of the last
+ * minute). Just after a start there may be no sample yet; then the size comes from the
+ * VM's info and the "used" figures are null rather than a made-up zero.
+ */
+export async function getSandboxStats(
+  userId: number,
+  agentId: string,
+): Promise<{ error: string } | { stats: SandboxStats }> {
+  if (!hasSandboxKey()) return { error: NO_KEY };
+  const row = await readRow(userId, agentId);
+  if (row?.status !== "running" || !row.providerId) return { error: "The VM isn't running." };
+
+  try {
+    const samples = await Sandbox.getMetrics(row.providerId, { start: new Date(Date.now() - 60_000) });
+    const last = samples.at(-1);
+    if (last) {
+      return {
+        stats: {
+          cpuCount: last.cpuCount,
+          cpuUsedPct: Math.round(last.cpuUsedPct),
+          memoryUsedMB: Math.round(last.memUsed / MB),
+          memoryTotalMB: Math.round(last.memTotal / MB),
+          diskUsedMB: Math.round(last.diskUsed / MB),
+          diskTotalMB: Math.round(last.diskTotal / MB),
+        },
+      };
+    }
+    const info = await Sandbox.getInfo(row.providerId);
+    return {
+      stats: {
+        cpuCount: info.cpuCount,
+        cpuUsedPct: null,
+        memoryUsedMB: null,
+        memoryTotalMB: info.memoryMB,
+        diskUsedMB: null,
+        diskTotalMB: null,
+      },
+    };
+  } catch (error) {
+    console.error("Couldn't read the VM's metrics:", error);
+    return { error: "Couldn't read the VM's usage." };
   }
 }
 

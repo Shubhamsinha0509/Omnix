@@ -292,6 +292,14 @@
 /* Spin for the live-run indicator; stopped by the reduced-motion rule above. */
 @keyframes omnix-spin { to { transform: rotate(360deg); } }
 
+/* The pointer gliding over the VM screen preview (21-chat-run-panel, `.cursor`). */
+@keyframes omnix-cursor {
+  0%, 100% { left: 30%; top: 40%; }
+  30% { left: 62%; top: 30%; }
+  55% { left: 48%; top: 58%; }
+  80% { left: 22%; top: 66%; }
+}
+
 /* ---------- Additions the reference screens use (not in design/globals.css) ---------- */
 :root {
   --brand-fill: var(--indigo-600);           /* solid indigo buttons, toggles, counts */

@@ -134,10 +134,8 @@ export default function ChatRunPanel({
    * Changes whenever the agent starts or finishes a VM tool step, so the VM card re-checks
    * at once: the agent may just have started or resumed the VM itself.
    */
-  const vmNudge = (run?.activity ?? [])
-    .filter((item) => item.tool.startsWith("sandbox"))
-    .map((item) => `${item.id}:${item.status}`)
-    .join("|");
+  const vmSteps = (run?.activity ?? []).filter((item) => item.tool.startsWith("sandbox"));
+  const vmNudge = vmSteps.map((item) => `${item.id}:${item.status}`).join("|");
   const badge = status ? BADGE[status] : null;
 
   return (
@@ -175,7 +173,7 @@ export default function ChatRunPanel({
         </button>
       </div>
 
-      <VmCard agentId={agentId} ready={vm.ready} initial={vm.initial} nudge={vmNudge} />
+      <VmCard agentId={agentId} ready={vm.ready} initial={vm.initial} nudge={vmNudge} steps={vmSteps} />
 
       <p className="px-1 pt-2 pb-1 text-caption font-medium text-run-panel-muted">Steps</p>
       {rows.length === 0 ? (

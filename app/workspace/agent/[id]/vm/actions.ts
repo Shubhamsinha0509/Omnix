@@ -4,12 +4,14 @@ import { getOwnedAgent } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 import {
   getSandbox,
+  getSandboxStats,
   openSandboxScreen,
   pauseSandbox,
   startSandbox,
   stopSandbox,
   type SandboxResult,
   type SandboxScreen,
+  type SandboxStats,
   type SandboxView,
 } from "@/lib/sandbox";
 
@@ -54,6 +56,13 @@ export async function openVmScreen(
   const who = await owner(agentId);
   if ("error" in who) return who;
   return openSandboxScreen(who.userId, agentId);
+}
+
+/** The running VM's CPU, memory and disk. */
+export async function getVmStats(agentId: string): Promise<{ error: string } | { stats: SandboxStats }> {
+  const who = await owner(agentId);
+  if ("error" in who) return who;
+  return getSandboxStats(who.userId, agentId);
 }
 
 /** Stops the VM and deletes everything on it. */

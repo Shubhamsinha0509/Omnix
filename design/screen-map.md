@@ -43,7 +43,7 @@ All 20 screens are built. What is real and what is mock (everything mock is in
 | Chat drawer → Schedule | "Once" (disabled: one-off runs need backend) |
 | Create agent | File analysis, Code execution, Multi-modal, Custom tools (coming soon) |
 | Live run | Pause, Stop, steering (disabled) |
-| Chat run panel | none: the VM card is real (`VmCard`, `lib/sandbox`, needs `E2B_API_KEY`); Stop on a run stops the reply. Not built yet: CPU / memory / disk figures, and the agent using the VM (Phase 6 tools) |
+| Chat run panel | none: the VM card is real (`VmCard`, `lib/sandbox`, needs `E2B_API_KEY`), including CPU / memory / disk from E2B's metrics and an activity log of what this page saw (not stored: it starts over on reload); Stop on a run stops the reply |
 | Inbox | none — `?preview=sample` shows `MOCK_INBOX_ITEMS` in development |
 | Integrations | Gmail, Notion, Jira and Slack are real (Slack needs a Slack app, D48); Drive, Calendar, GitHub and Discord are still `MOCK_INTEGRATIONS` |
 | Marketplace | all templates (`MOCK_TEMPLATES`); "Use template" → real Create agent |
