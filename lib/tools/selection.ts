@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { agentTools, connections, db, type Agent } from "@/db";
 import { mcpToolDefinitions } from "@/lib/mcp/tools";
 import { serverForProvider } from "@/lib/mcp/servers";
+import { hasSandboxKey } from "@/lib/sandbox";
 import { TOOLS } from "./registry";
 import { isNativeTool, type AnyTool, type ToolRisk } from "./types";
 
@@ -25,10 +26,17 @@ export type ResolvedTool = {
 /**
  * A tool with no `provider` and `risk: "read"` is on unless the user turned it off; that
  * was the Phase 2 behaviour and existing agents keep it. Everything else — anything that
- * reaches a connected account, writes, or sends — starts off.
+ * reaches a connected account, writes, or sends — starts off. So does every VM tool, even
+ * the reading ones: using one starts a VM, which costs money, so it is the user's choice.
  */
 function defaultEnabled(tool: AnyTool) {
+  if (!isNativeTool(tool) && tool.runsIn === "sandbox") return false;
   return !("provider" in tool && tool.provider) && tool.risk === "read";
+}
+
+/** VM tools exist only when E2B is configured; without it they aren't offered or listed. */
+function available(tool: AnyTool) {
+  return isNativeTool(tool) || tool.runsIn !== "sandbox" || hasSandboxKey();
 }
 
 /**
@@ -124,7 +132,7 @@ async function toolsForUser(userId: number): Promise<AnyTool[]> {
     mcpConnections.map((row) => mcpToolDefinitions({ id: row.id, provider: row.provider })),
   );
 
-  return [...Object.values(TOOLS), ...perConnection.flat()];
+  return [...Object.values(TOOLS).filter(available), ...perConnection.flat()];
 }
 
 /**
@@ -244,4 +252,9 @@ const TOOL_SUMMARIES: Record<string, string> = {
   "gmail.read": "Read one message in full, including attachment names.",
   "gmail.create_draft": "Save a draft in your Drafts folder. Nothing is sent.",
   "gmail.send": "Send an email from your account. This can't be taken back.",
+  "sandbox.run_code": "Run Python or Bash in this agent's VM. Starts the VM if it's off.",
+  "sandbox.write_file": "Save files in this agent's VM.",
+  "sandbox.read_file": "Read files from this agent's VM.",
+  "sandbox.list_files": "See what's in this agent's VM.",
+  "sandbox.open_browser": "Open pages in the VM's browser, on the live screen.",
 };

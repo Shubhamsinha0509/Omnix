@@ -68,6 +68,12 @@ async function main() {
     check("pause with no VM is a no-op", "vm" in (await vmLib.pauseSandbox(user.id, agent.id)) || !vmLib.hasSandboxKey());
     check("stop with no VM is a no-op", "vm" in (await vmLib.stopSandbox(user.id, agent.id)) || !vmLib.hasSandboxKey());
 
+    section("VM tools are opt-in");
+    const { resolveAgentTools, TOOLS } = await import("@/lib/tools");
+    const offered = (await resolveAgentTools(agent)).map((r) => r.tool.key);
+    check("a new agent gets no VM tools", !offered.some((key) => key.startsWith("sandbox.")), offered);
+    check("all five are registered", ["run_code", "write_file", "read_file", "list_files", "open_browser"].every((k) => `sandbox.${k}` in TOOLS));
+
     if (!vmLib.hasSandboxKey()) {
       section("No E2B key");
       const result = await vmLib.startSandbox(user.id, agent.id);
@@ -136,6 +142,62 @@ async function main() {
         gone = true;
       }
       check("E2B no longer has it", gone);
+
+      section("Agent tools in the VM (live)");
+      const sandboxTools = await import("@/lib/tools/sandbox");
+      const ctx = {
+        user,
+        agent,
+        runId: crypto.randomUUID(),
+        timezone: "UTC",
+        signal: new AbortController().signal,
+        auth: null,
+      };
+      type Out = { exitCode: number; stdout: string; stderr: string };
+      const run = async (language: string, code: string) =>
+        sandboxTools.sandboxRunCode.execute(ctx, { language, code });
+
+      const t1 = Date.now();
+      const py = await run("python", "print(sum(range(10)))");
+      console.log(`       first call (starts the VM) took ${((Date.now() - t1) / 1000).toFixed(1)}s`);
+      check("python runs, starting the VM by itself", "output" in py && (py.output as Out).stdout.trim() === "45", py);
+      check("the VM is now running", (await vmLib.getSandbox(user.id, agent.id)).status === "running");
+      const bad = await run("python", "raise ValueError('boom')");
+      check(
+        "a failing program is output, with its error",
+        "output" in bad && (bad.output as Out).exitCode !== 0 && (bad.output as Out).stderr.includes("ValueError"),
+        bad,
+      );
+      const sh = await run("bash", "echo hi from $(uname -s)");
+      check("bash runs", "output" in sh && (sh.output as Out).stdout.includes("hi from Linux"), sh);
+      // Node isn't in E2B's desktop image, so it isn't offered: a clear refusal, no VM call.
+      const js = await run("node", "console.log(6 * 7)");
+      check("node is refused clearly", "error" in js && js.error.includes("python or bash"), js);
+
+      const saved = await sandboxTools.sandboxWriteFile.execute(ctx, { path: "notes/today.md", content: "# Hello" });
+      check("write_file saves under /home/user", "output" in saved, saved);
+      const read = await sandboxTools.sandboxReadFile.execute(ctx, { path: "/home/user/notes/today.md" });
+      check("read_file reads it back", "output" in read && (read.output as { text: string }).text === "# Hello", read);
+      const listed = await sandboxTools.sandboxListFiles.execute(ctx, { path: "notes" });
+      check(
+        "list_files finds it",
+        "output" in listed && (listed.output as { entries: { name: string }[] }).entries.some((e) => e.name === "today.md"),
+        listed,
+      );
+      const home = await sandboxTools.sandboxListFiles.execute(ctx, {});
+      check(
+        "our scratch folder is hidden",
+        "output" in home && !(home.output as { entries: { name: string }[] }).entries.some((e) => e.name === ".omnix"),
+      );
+      const escape1 = await sandboxTools.sandboxReadFile.execute(ctx, { path: "/etc/passwd" });
+      check("paths outside home are refused", "error" in escape1, escape1);
+      const escape2 = await sandboxTools.sandboxReadFile.execute(ctx, { path: "../../etc/passwd" });
+      check("so are ../ escapes", "error" in escape2, escape2);
+      const browser = await sandboxTools.sandboxOpenBrowser.execute(ctx, { url: "https://example.com" });
+      check("open_browser opens a page", "output" in browser, browser);
+      console.log(`       window title: ${"output" in browser ? JSON.stringify((browser.output as { windowTitle: string }).windowTitle) : "-"}`);
+      const notWeb = await sandboxTools.sandboxOpenBrowser.execute(ctx, { url: "file:///etc/passwd" });
+      check("open_browser refuses non-web addresses", "error" in notWeb, notWeb);
     } else {
       console.log("\n(skipping live checks; pass --live to start a real VM)");
     }

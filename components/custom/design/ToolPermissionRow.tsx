@@ -1,6 +1,19 @@
 "use client";
 
-import { Clock, Globe, Mail, Search, SquarePen, Wrench, type LucideIcon } from "lucide-react";
+import {
+  AppWindow,
+  Clock,
+  FilePen,
+  FileText,
+  FolderOpen,
+  Globe,
+  Mail,
+  Search,
+  SquarePen,
+  SquareTerminal,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +27,11 @@ export const TOOL_ICONS: Record<string, LucideIcon> = {
   "gmail.read": Mail,
   "gmail.create_draft": SquarePen,
   "gmail.send": SquarePen,
+  "sandbox.run_code": SquareTerminal,
+  "sandbox.write_file": FilePen,
+  "sandbox.read_file": FileText,
+  "sandbox.list_files": FolderOpen,
+  "sandbox.open_browser": AppWindow,
 };
 
 /**

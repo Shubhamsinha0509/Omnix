@@ -21,6 +21,8 @@ type Props = {
   ready: boolean;
   /** The VM as the page found it. */
   initial: SandboxView;
+  /** Changes when the agent uses a VM tool: time to re-check, it may have started the VM. */
+  nudge?: string;
 };
 
 /** "00:03:12" */
@@ -55,7 +57,7 @@ const DANGER = cn(
   "border border-destructive/45 text-destructive hover:bg-destructive/5 dark:border-[#F87171]/45 dark:text-[#F87171] dark:hover:bg-white/5",
 );
 
-export default function VmCard({ agentId, ready, initial }: Props) {
+export default function VmCard({ agentId, ready, initial, nudge }: Props) {
   const [vm, setVm] = useState<SandboxView>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(initial.error);
@@ -102,6 +104,14 @@ export default function VmCard({ agentId, ready, initial }: Props) {
       // Offline for a moment: the next check will catch up.
     }
   }, [agentId]);
+
+  // The agent used the VM: check now rather than at the next scheduled look. A short delay
+  // folds a burst of step updates into one check.
+  useEffect(() => {
+    if (!nudge) return;
+    const timer = window.setTimeout(refresh, 300);
+    return () => window.clearTimeout(timer);
+  }, [nudge, refresh]);
 
   // Tick the uptime once a second while it runs.
   useEffect(() => {

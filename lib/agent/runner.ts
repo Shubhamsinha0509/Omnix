@@ -1047,14 +1047,15 @@ async function callTool(args: {
   return withTimeout(args.tool, args.args, { ...args.base, auth });
 }
 
-/** Runs a tool, but never waits longer than the per-tool limit. */
+/** Runs a tool, but never waits longer than its limit (its own, or the runner's default). */
 async function withTimeout(tool: ToolDefinition, toolArgs: Record<string, unknown>, base: ToolContext) {
-  const timeout = AbortSignal.timeout(LIMITS.toolTimeoutMs);
+  const limitMs = tool.timeoutMs ?? LIMITS.toolTimeoutMs;
+  const timeout = AbortSignal.timeout(limitMs);
   const ctx: ToolContext = { ...base, signal: AbortSignal.any([base.signal, timeout]) };
 
   const timedOut = new Promise<{ error: string }>((resolve) => {
     timeout.addEventListener("abort", () =>
-      resolve({ error: `${tool.key} took longer than ${LIMITS.toolTimeoutMs / 1000}s and was stopped.` }),
+      resolve({ error: `${tool.key} took longer than ${limitMs / 1000}s and was stopped.` }),
     );
   });
 

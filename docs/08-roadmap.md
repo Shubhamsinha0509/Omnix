@@ -184,7 +184,7 @@ back, but the fallback has only been exercised as far as the auth wall.
 
 - [ ] Spike: confirm E2B covers browser, network allow-lists, pause/resume and pricing for our needs (API confirmed from E2B's docs and SDK types; allow-lists and pricing still open)
 - [x] `sandboxes` table; E2B create / pause / resume / destroy lifecycle (`lib/sandbox`, D50). Verified live against E2B on 2026-11-24 (`npm run verify:vm -- --live`, 20 checks: start in ~8.5 s, one VM for two clicks, pause and resume keep files, stop deletes it)
-- [ ] Tools: `sandbox.run_code`, `sandbox.files`, `sandbox.browser`
+- [x] Tools: `sandbox.run_code` (python, bash), `sandbox.write_file` / `read_file` / `list_files`, `sandbox.open_browser` (D52). Off by default; switched on per agent in the Tools tab. Verified live by calling each tool against a real VM; not yet exercised by a model in a chat
 - [ ] Runtime toggle in agent settings; VM status indicator (status, Start / Pause / Resume / Stop and the live screen are built in the chat's run panel, `VmCard`, and checked in the app on 2026-11-24; the settings toggle is still mock)
 - [ ] VM usage tracked per run
 

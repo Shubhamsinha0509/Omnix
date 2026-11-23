@@ -83,6 +83,11 @@ export type ToolDefinition = {
   provider?: string;
   /** Where the tool's code runs. `sandbox` tools need the agent's VM (Phase 6). */
   runsIn: "server" | "sandbox";
+  /**
+   * How long one call may take, when the runner's default (`LIMITS.toolTimeoutMs`) is too
+   * short — VM tools may have to start the VM first, which alone takes ~10 s.
+   */
+  timeoutMs?: number;
   parameters: JsonSchema;
   /**
    * The parameter schema exactly as its source published it, for tools whose schema is

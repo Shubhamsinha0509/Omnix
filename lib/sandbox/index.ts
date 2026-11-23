@@ -300,6 +300,50 @@ export async function stopSandbox(userId: number, agentId: string): Promise<Sand
   }
 }
 
+/**
+ * A running VM for one tool call, started or resumed if it has to be (docs/06: "first
+ * sandbox tool call → create VM, or resume if paused").
+ *
+ * If someone else is already starting it (the user's click, another call), this waits for
+ * them rather than racing. Every call counts as use, so the auto-pause moves back by
+ * `IDLE_MS`. The returned object is for this call only; nothing holds on to it.
+ */
+export async function sandboxForTool(
+  userId: number,
+  agentId: string,
+  signal?: AbortSignal,
+): Promise<{ error: string } | { vm: Sandbox }> {
+  if (!hasSandboxKey()) return { error: NO_KEY };
+
+  const deadline = Date.now() + 60_000;
+  let view = await getSandbox(userId, agentId);
+  while (view.status !== "running") {
+    if (signal?.aborted) return { error: "Stopped." };
+    if (Date.now() > deadline) return { error: "The VM took too long to start. Try again in a moment." };
+
+    if (["stopped", "paused", "error"].includes(view.status)) {
+      const started = await startSandbox(userId, agentId);
+      if ("error" in started) return started;
+      view = started.vm;
+    } else {
+      // Starting, pausing or stopping elsewhere: wait for it to settle, then carry on.
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      view = await getSandbox(userId, agentId);
+    }
+  }
+
+  const row = await readRow(userId, agentId);
+  if (!row?.providerId) return { error: "The VM isn't available. Please try again." };
+  try {
+    const vm = await Sandbox.connect(row.providerId, { timeoutMs: IDLE_MS });
+    await save(userId, agentId, { expiresAt: new Date(Date.now() + IDLE_MS) });
+    return { vm };
+  } catch (error) {
+    console.error("Couldn't connect to the VM for a tool call:", error);
+    return { error: "Couldn't reach the VM. Please try again." };
+  }
+}
+
 /** Links to the VM's live screen: one to watch, one to use the mouse and keyboard. */
 export type SandboxScreen = { viewUrl: string; controlUrl: string };
 
