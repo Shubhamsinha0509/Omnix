@@ -1,6 +1,7 @@
-import { eq, max } from "drizzle-orm";
+import { and, count, desc, eq, inArray, lt, max, sql } from "drizzle-orm";
 
-import { db, runSteps, runs, type NewRun, type RunStep } from "@/db";
+import { agents, db, runSteps, runs, tasks, type NewRun, type Run, type RunStep } from "@/db";
+import { UUID_PATTERN } from "@/lib/agents";
 
 /**
  * The audit log. Every run and every step inside it is written here, so anything an
@@ -59,6 +60,11 @@ export async function pauseRunForApproval(runId: string, inputTokens: number, ou
     .where(eq(runs.id, runId));
 }
 
+/** Puts a paused background run back to `running` once its approval has been decided. */
+export async function resumeRunAfterApproval(runId: string) {
+  await db.update(runs).set({ status: "running" }).where(eq(runs.id, runId));
+}
+
 type FinishRun = {
   runId: string;
   status: "succeeded" | "failed" | "cancelled";
@@ -78,6 +84,138 @@ export async function finishRun({ runId, status, error, inputTokens = 0, outputT
       finishedAt: new Date(),
     })
     .where(eq(runs.id, runId));
+}
+
+/**
+ * Reading the log back — the Runs tab.
+ *
+ * Everything here is scoped to a user, because a run holds whatever the agent read: the
+ * subject lines of somebody's email, the pages it fetched. There is no unscoped lookup.
+ */
+
+export type RunSummary = {
+  id: string;
+  trigger: Run["trigger"];
+  status: Run["status"];
+  error: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  startedAt: Date;
+  finishedAt: Date | null;
+  conversationId: string | null;
+  taskId: string | null;
+  taskName: string | null;
+  /** How many steps the run wrote, for "6 steps" without loading them all. */
+  steps: number;
+};
+
+/** One agent's runs, newest first, each with the task it belongs to and its step count. */
+export async function listRuns(agentId: string, userId: number, limit = 50): Promise<RunSummary[]> {
+  if (!UUID_PATTERN.test(agentId)) return [];
+
+  const rows = await db
+    .select({
+      id: runs.id,
+      trigger: runs.trigger,
+      status: runs.status,
+      error: runs.error,
+      inputTokens: runs.inputTokens,
+      outputTokens: runs.outputTokens,
+      startedAt: runs.startedAt,
+      finishedAt: runs.finishedAt,
+      conversationId: runs.conversationId,
+      taskId: runs.taskId,
+      taskName: tasks.name,
+    })
+    .from(runs)
+    .leftJoin(tasks, eq(runs.taskId, tasks.id))
+    .where(and(eq(runs.agentId, agentId), eq(runs.userId, userId)))
+    .orderBy(desc(runs.startedAt))
+    .limit(limit);
+
+  if (rows.length === 0) return [];
+
+  // One grouped count instead of a query per run.
+  const counts = await db
+    .select({ runId: runSteps.runId, total: count() })
+    .from(runSteps)
+    .where(
+      inArray(
+        runSteps.runId,
+        rows.map((row) => row.id),
+      ),
+    )
+    .groupBy(runSteps.runId);
+
+  const byRun = new Map(counts.map((row) => [row.runId, Number(row.total)]));
+  return rows.map((row) => ({ ...row, steps: byRun.get(row.id) ?? 0 }));
+}
+
+export type RunDetail = {
+  run: RunSummary & { agentId: string; agentName: string };
+  steps: RunStep[];
+};
+
+/** One run with its whole timeline, for the run page. Null if it isn't this user's. */
+export async function getRunDetail(runId: string, userId: number): Promise<RunDetail | null> {
+  if (!UUID_PATTERN.test(runId)) return null;
+
+  const [row] = await db
+    .select({
+      id: runs.id,
+      trigger: runs.trigger,
+      status: runs.status,
+      error: runs.error,
+      inputTokens: runs.inputTokens,
+      outputTokens: runs.outputTokens,
+      startedAt: runs.startedAt,
+      finishedAt: runs.finishedAt,
+      conversationId: runs.conversationId,
+      taskId: runs.taskId,
+      taskName: tasks.name,
+      agentId: runs.agentId,
+      agentName: agents.name,
+    })
+    .from(runs)
+    .innerJoin(agents, eq(runs.agentId, agents.id))
+    .leftJoin(tasks, eq(runs.taskId, tasks.id))
+    .where(and(eq(runs.id, runId), eq(runs.userId, userId)))
+    .limit(1);
+
+  if (!row) return null;
+
+  const steps = await db
+    .select()
+    .from(runSteps)
+    .where(eq(runSteps.runId, runId))
+    .orderBy(runSteps.seq, runSteps.createdAt);
+
+  return { run: { ...row, steps: steps.length }, steps };
+}
+
+/** What a purged step's payload is replaced with, so the UI can say why it is empty. */
+const PURGED = { purged: true };
+
+/**
+ * Retention: forgets the *contents* of old steps while keeping the shape of the run.
+ *
+ * A step's payload is the email the agent read and the page it fetched, and there is no
+ * reason to hold that for ever (decision D43). The rows stay — what ran, when, and
+ * whether it worked is the audit log and costs nothing — but their payloads are emptied.
+ */
+export async function purgeStepPayloadsBefore(cutoff: Date) {
+  const cleared = await db
+    .update(runSteps)
+    .set({ payload: PURGED })
+    .where(
+      and(
+        lt(runSteps.createdAt, cutoff),
+        // Rows already purged are left alone, so the sweep's count means something.
+        sql`${runSteps.payload} <> ${JSON.stringify(PURGED)}::jsonb`,
+      ),
+    )
+    .returning({ id: runSteps.id });
+  return cleared.length;
 }
 
 const SECRET_KEY = /token|secret|password|passwd|credential|api[-_]?key|authorization|cookie/i;

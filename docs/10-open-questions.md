@@ -2,7 +2,7 @@
 
 Decide these before the phase listed. When decided, record the answer in [decisions](09-decisions.md) and remove it from here.
 
-Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16), GitHub + Google sign-in (D18), approvals off-switch limited to `write` tools (D29), default model (D34), how a chat approval pauses and resumes (D35). MCP-first integrations is proposed (D17).
+Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16), GitHub + Google sign-in (D18), approvals off-switch limited to `write` tools (D29), default model (D34), how a chat approval pauses and resumes (D35), how tasks are scheduled (D40), how a background run stays durable and waits for approval (D41), in-app delivery (D42), how long run logs are kept (D43), the email provider (D44) and the caps on unattended work (D45). MCP-first integrations is proposed (D17).
 
 ## Product
 
@@ -26,12 +26,11 @@ Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16)
 |---|---|---|
 | Can VM agents access the internet freely, or only allow-listed sites? | Security vs usefulness | Phase 6 |
 | Do we let users pick the model per agent? | The default is decided (`deepseek/deepseek-chat-v3.1`, D34) and set in one place. A per-agent `model` column is still planned: cheap to offer, but someone has to own the cost of an agent switched to an expensive model | Phase 7 |
-| What is the monthly OpenRouter budget, and what happens at the limit? | Tokens and per-search `web.search` charges both draw on account credit; a 402 currently just surfaces as an error message | Phase 4 (before agents run unattended) |
+| What is the monthly OpenRouter budget, and what happens at the limit? | Tokens and per-search `web.search` charges both draw on account credit; a 402 currently just surfaces as an error message. **Partly answered:** D45 caps unattended work (4 runs an hour per task, 20 tasks an agent, 50 background runs a day per user) so a schedule cannot drain the account while this is undecided — but nothing yet watches actual spend, and a 402 mid-task still just fails that run | Phase 7 (with usage tracking) |
 | Vercel plan (Hobby vs Pro)? | Function duration limits and commercial-use terms | Before deploying |
 
 ## Security and privacy
 
 | Question | Why it matters | Decide before |
 |---|---|---|
-| How long do we keep run logs that contain email/Slack content? | Privacy, storage cost | Phase 4 |
 | Budget and timeline for Google's restricted-scope verification (CASA)? | Blocks public Gmail access | Before launch |

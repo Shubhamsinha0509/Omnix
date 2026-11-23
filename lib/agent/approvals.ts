@@ -13,11 +13,12 @@ import type { ApprovalSummary } from "@/lib/tools";
  * what happens is what the card showed, even if the mailbox the agent read has changed
  * its mind since.
  *
- * Background runs in Phase 4 wait on an Inngest event instead and keep their state in the
- * step; everything else here — the row, the risk rules, the card — is shared.
+ * A background run doesn't need any of that state: it waits on `approval/decided` inside
+ * an Inngest step and carries on in the same run (D41), so its row stores no copy of the
+ * turn. Everything else here — the row, the claim, the card — is shared by both.
  */
 
-/** 24 hours, the same window `step.waitForEvent` will use for background runs. */
+/** 24 hours, the same window `step.waitForEvent` uses for background runs. */
 const TTL_MS = 24 * 60 * 60_000;
 
 /**
@@ -66,12 +67,17 @@ type CreateApproval = {
   card: ApprovalSummary;
   /** The exact validated arguments. This is what runs on approval, never a fresh call. */
   payload: Record<string, unknown>;
-  resume: ApprovalResume;
+  /**
+   * The paused turn, for a chat approval. A background run leaves this out: it is still
+   * running, parked on its own wait, so there is nothing to store — and what there would
+   * be to store is whatever the agent has read (D41).
+   */
+  resume?: ApprovalResume;
 };
 
 export async function createApproval(input: CreateApproval): Promise<PendingApproval> {
-  const resume = JSON.stringify(input.resume);
-  const resumable = resume.length <= MAX_RESUME_BYTES;
+  const resume = input.resume ? JSON.stringify(input.resume) : "";
+  const resumable = Boolean(input.resume) && resume.length <= MAX_RESUME_BYTES;
 
   const [row] = await db
     .insert(approvals)
@@ -85,7 +91,7 @@ export async function createApproval(input: CreateApproval): Promise<PendingAppr
       summary: input.card.summary,
       details: input.card.details ?? [],
       payload: input.payload,
-      resume: resumable ? input.resume : {},
+      resume: resumable ? input.resume! : {},
       expiresAt: new Date(Date.now() + TTL_MS),
     })
     .returning();
@@ -130,11 +136,13 @@ export async function getApproval(userId: number, approvalId: string) {
 }
 
 /**
- * The approval plus the agent whose run it belongs to.
+ * The approval plus the run it belongs to.
  *
  * A decision has to be made *as* that agent — its tools and its connections decide what
  * the approved action can still do — and the run only records the agent id, so the two
- * are read together rather than by two callers who might disagree.
+ * are read together rather than by two callers who might disagree. `taskId` comes along
+ * because it decides *how* the decision is acted on: a chat approval is resumed in the
+ * request that answers it, a task's is handed to the background run waiting for it.
  */
 export async function findApprovalRun(userId: number, approvalId: string) {
   if (!UUID.test(approvalId)) return null;
@@ -144,6 +152,8 @@ export async function findApprovalRun(userId: number, approvalId: string) {
       id: approvals.id,
       runId: approvals.runId,
       agentId: runs.agentId,
+      taskId: runs.taskId,
+      trigger: runs.trigger,
       conversationId: approvals.conversationId,
       tool: approvals.tool,
       summary: approvals.summary,
@@ -262,7 +272,9 @@ function toPending(row: Approval): PendingApproval {
     details: Array.isArray(row.details) ? (row.details as { label: string; value: string }[]) : [],
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
-    resumable: Boolean((row.resume as { messages?: unknown })?.messages),
+    // An empty array is not a turn: it has to agree with `readResume`, which treats one
+    // as nothing to resume from.
+    resumable: ((row.resume as { messages?: unknown[] })?.messages?.length ?? 0) > 0,
   };
 }
 

@@ -5,9 +5,11 @@ import AgentChat from "@/components/custom/workspace/AgentChat";
 import { conversations, db, messages } from "@/db";
 import { listPendingForConversation } from "@/lib/agent/approvals";
 import { hasModelKey } from "@/lib/ai";
-import { TOOLS } from "@/lib/tools";
+import { TOOLS, listToolSettings } from "@/lib/tools";
+import { listConnections } from "@/lib/integrations/connections";
 import { UUID_PATTERN, getOwnedAgent, listConversations } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
+import { listTasks, toTaskView } from "@/lib/tasks";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -26,7 +28,13 @@ export default async function AgentPage({ params, searchParams }: Props) {
   const agent = await getOwnedAgent(user.id, id);
   if (!agent) notFound();
 
-  const chats = await listConversations(agent.id, user.id);
+  // The chat list, plus what the configuration panel beside the chat needs.
+  const [chats, tools, connections, tasks] = await Promise.all([
+    listConversations(agent.id, user.id),
+    listToolSettings(agent),
+    listConnections(user.id),
+    listTasks(agent.id, user.id),
+  ]);
 
   // The chat to show: the one asked for, or the most recent one.
   let activeId: string | null = null;
@@ -86,6 +94,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
         resumable: approval.resumable,
       }))}
       aiReady={hasModelKey()}
+      config={{ tools, connections, conversationCount: chats.length, tasks: tasks.map(toTaskView) }}
     />
   );
 }

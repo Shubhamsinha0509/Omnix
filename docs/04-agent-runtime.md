@@ -1,7 +1,7 @@
 # 4. Agent runtime
 
-How an agent actually thinks and acts. **Built** in Phases 2 and 3 (`lib/agent/`, `lib/tools/`)
-except where marked otherwise.
+How an agent actually thinks and acts. **Built** in Phases 2 to 4 (`lib/agent/`, `lib/tools/`,
+`lib/inngest/`) except where marked otherwise.
 
 ## The loop
 
@@ -61,12 +61,15 @@ model replies with `tool_calls`. Three details matter in practice:
 `text` (a piece of the reply), `activity` (a tool starting or finishing), `note`
 (something the user should see that isn't part of the reply — a safety refusal, a limit
 that was hit) and `approval` (the agent is asking permission; the turn stops there). The
-chat route forwards them to the browser as NDJSON (decision D23); background runs in
-Phase 4 will log them instead.
+chat route forwards them to the browser as NDJSON (decision D23). A background run has
+nobody watching, so it ignores `text` and `activity` — `run_steps` already has them, in
+more detail — keeps the `note`s to put under the delivered result, and turns an `approval`
+into a notification it then waits on.
 
 Only `text` is saved to the conversation. `activity` and `note` last for the turn (D24).
 An `approval` outlives both, in the `approvals` table, because the user may come back to
-it tomorrow — so reopening a chat shows any card still waiting in it.
+it tomorrow — so reopening a chat shows any card still waiting in it, and a background
+run's card waits in the Inbox.
 
 ## Tools
 
@@ -134,18 +137,34 @@ If the provider refuses a server tool, the run doesn't die with it: see D25.
 | Trigger | How | Phase |
 |---|---|---|
 | **Chat** | User message → API route → `runAgent` (streamed) | built |
-| **Manual "Run now"** | Button → Inngest event `agent/task.run` | 4 |
-| **Schedule** | One Inngest cron function checks for due tasks every minute and fans out `agent/task.run` events (per-task cron in the user's timezone stored in `tasks`) | 4 |
+| **Manual "Run now"** | Button → `agent/task.run` event → the same Inngest function a schedule uses | built |
+| **Schedule** | One Inngest cron checks for due tasks every minute and fans out `agent/task.run` events; the per-task cron is read in the user's timezone from `tasks` (D40) | built |
 | **Event** | Webhooks / push notifications (Gmail push via Pub/Sub, Slack Events API) → Inngest event → matching tasks | 5 |
 
 Background runs use Inngest so each model call and tool call is a separate `step.run()` — if step 5 fails, Inngest retries step 5, not the whole run, and steps whose completion Inngest has already recorded are not run again.
+
+How that reaches the one shared runner is a small adapter, not a second loop (decision
+D41). `runAgent` takes a `Durability` (`lib/agent/durability.ts`): chat passes
+`immediate`, which just runs each piece; the Inngest function passes one whose `step`
+is `step.run`. Three consequences are worth knowing before changing this code:
+
+- **A step's result has to survive JSON.** That is why a tool call returns the tool's
+  *key* rather than the tool itself, and why anything with a `Date` in it is handed back
+  as an ISO string.
+- **Code outside a step runs again on every pass.** So every write — the step log, the
+  approval row, the limit notes — happens *inside* a step, or it would be written once
+  per replay. The step log also takes its sequence numbers from the database rather than
+  from a counter in memory, which would restart at zero while half the timeline existed.
+- **What a replayed turn streamed is gone.** A memoised turn never calls `onText`, so a
+  durable run builds its reply from each turn's stored text instead.
 
 That is not a guarantee that an external action happens only once. If a worker dies after a tool has acted (an email went out) but before Inngest records the step as complete, the retry runs the step again and repeats the action. So every tool with an external effect must be **idempotent or reconcilable**: pass an idempotency key derived from the run and step where the provider supports one, or check for the earlier result before acting again (e.g. look for the sent message before re-sending).
 
 ## Approvals
 
-**Built** for chat in Phase 3 (`lib/agent/approvals.ts`, `resumeAgent()` in the runner,
-`POST /api/approvals/:id`). Background runs get the same table and card in Phase 4.
+**Built** (`lib/agent/approvals.ts`, `resumeAgent()` in the runner,
+`POST /api/approvals/:id`) for chat in Phase 3 and for background runs in Phase 4, which
+share the table, the risk rules and the card.
 
 1. A tool needing approval is about to run → nothing is executed. An `approvals` row is
    written with the **exact validated arguments** and a card: a one-line summary plus the
@@ -153,25 +172,33 @@ That is not a guarantee that an external action happens only once. If a worker d
 2. The run's status becomes `waiting_approval` and the turn **stops there**. Any further
    tool calls the model made in the same turn are answered "not run"; it may ask again
    after the decision. One card at a time, so "Approve" is never ambiguous.
-3. The paused turn's model conversation is stored on the row. A chat turn is one HTTP
-   request and cannot sit waiting for a click, so the stream ends, the partial reply is
-   saved, and the card survives a reload in the `approvals` table (decision D35). Phase 4
-   uses Inngest's `step.waitForEvent("approval/decided", { timeout: "24h" })` instead and
-   keeps the state in the step.
+3. **In chat**, the paused turn's model conversation is stored on the row: a chat turn is
+   one HTTP request and cannot sit waiting for a click, so the stream ends, the partial
+   reply is saved, and the card survives a reload in the `approvals` table (decision D35).
+   **In a background run** there is nothing to store — the run itself is still there,
+   parked on `step.waitForEvent("approval/decided", { timeout: "24h" })` — so the row
+   keeps no copy of the turn, and the card is answered from the Inbox. Deciding it records
+   the decision and sends the event; the waiting run does the work and finishes the job.
+   If that event is ever lost, the 24-hour timeout reads the row before giving up, so a
+   decision that was recorded is still honoured.
 4. **Approved** → the stored payload runs, not a call the model regenerates. That is the
    security property: what happens is what the card showed, even if the mailbox the agent
    read has changed its mind since. **Rejected or expired** → the model is told it was
    declined and gets to finish.
-5. Either way the agent carries on from the stored conversation and streams the rest of
-   its reply, which is saved as its own message — so the chat reads reply → card → reply.
-   The stored copy of the conversation is deleted as soon as the decision is acted on,
-   because it holds whatever the agent had read.
+5. Either way the agent carries on and finishes its turn. In chat it streams the rest of
+   its reply, which is saved as its own message — so the chat reads reply → card → reply —
+   and the stored copy of the conversation is deleted as soon as the decision is acted on,
+   because it holds whatever the agent had read. In a background run the loop simply
+   continues, and the finished result is delivered as usual.
+6. **Nobody answering is an answer.** After 24 hours the card expires, the model is told
+   the action was not allowed, and the agent gets to finish and say what is still waiting.
 
 A decision is claimed with one conditional `UPDATE`, so a double-click or a second tab
 cannot make the same email go out twice, and resuming takes the conversation lease like
 any other turn (D30).
 
-In chat the approval appears inline as a card with Approve / Reject.
+In chat the approval appears inline as a card with Approve / Reject. For a background
+run the same card appears in the Inbox, with the notification that brought it.
 
 ## Memory
 
@@ -182,12 +209,30 @@ In chat the approval appears inline as a card with Approve / Reject.
 
 ## Results and delivery
 
-A task's final answer is saved on the run and delivered to `deliver_to` (in-app notification, email to the user, or a Slack DM/channel).
+**Built** (`lib/delivery/`). A task's final answer is on its run either way, and is
+delivered to whichever channels the task names: the in-app Inbox (a `notifications` row,
+D42) and/or an email to the user (Resend over HTTPS, D44). Slack joins them in Phase 5.
+
+Two rules make this predictable. Delivery never fails a run — the work and the log are
+already done by the time anything is delivered, so a provider being down is reported, not
+raised. And a channel that cannot deliver, including email on a server with no email
+provider configured, falls back to the Inbox: a result that silently went nowhere would be
+worse than one that arrived in the wrong place.
+
+What bounds unattended work is in D45: at most four runs an hour per task schedule, twenty
+tasks per agent, and fifty background runs per user per day — past which a run is skipped
+and the user is told, rather than the account being quietly drained.
 
 ## Observability
 
-Everything is already written to `runs` and `run_steps` on every chat turn: model turns,
-tool calls with inputs/outputs (secrets redacted), errors, tokens and duration. The UI for
-it — a Runs tab per agent — comes with background tasks in Phase 4; until then it is read
-with `drizzle-kit studio` or SQL. In chat the user sees the short version live: one line
-per tool, with the host it fetched or the searches it ran (decision D24).
+Everything is written to `runs` and `run_steps` on every run, chat or background: model
+turns, tool calls with inputs/outputs (secrets redacted), errors, tokens and duration.
+
+The **Runs tab** (`/workspace/agent/[id]/runs`) reads it back — the list of runs, and each
+one's timeline step by step, including chat turns going back to Phase 2. Payloads are shown
+as text and never as Markdown or HTML: a step holds whatever the agent read, and that page
+is the one place it is shown in full (see [security](07-security.md)). After 30 days a
+step's payload is emptied by the retention sweep and the page says so (D43).
+
+In chat the user sees the short version live: one line per tool, with the host it fetched
+or the searches it ran (decision D24).

@@ -1,9 +1,10 @@
 import { db, messages } from "@/db";
-import { findApprovalRun } from "@/lib/agent/approvals";
+import { claimApproval, findApprovalRun } from "@/lib/agent/approvals";
 import { RUN_STREAM_CONTENT_TYPE, encodeEvent, type RunEvent } from "@/lib/agent/events";
 import { resumeAgent } from "@/lib/agent/runner";
 import { claimConversation, getOwnedAgent, releaseConversation } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
+import { inngest } from "@/lib/inngest/client";
 
 const jsonError = (error: string, status: number, extra?: Record<string, unknown>) =>
   Response.json({ error, ...extra }, { status });
@@ -11,12 +12,18 @@ const jsonError = (error: string, status: number, extra?: Record<string, unknown
 /**
  * POST /api/approvals/:id  { decision: "approve" | "reject" }
  *
- * Acts on one approval card and streams whatever the agent does next, in the same NDJSON
- * event format as a chat turn (decision D23). Approving performs the **stored** action and
- * lets the agent carry on from where it paused; rejecting tells it so and lets it reply.
+ * Acts on one approval card. What that means depends on what was waiting for it:
  *
- * The decision itself is claimed inside `resumeAgent`, in a single conditional update, so
- * two clicks cannot make the same thing happen twice.
+ * - **A chat turn** has nothing running any more, so this request does the work and
+ *   streams whatever the agent does next, in the same NDJSON format as a chat turn
+ *   (D23). Approving performs the **stored** action and lets the agent carry on from
+ *   where it paused; rejecting tells it so and lets it reply.
+ * - **A background run** is still there, parked on `step.waitForEvent`. So this request
+ *   only records the decision and sends the event; the run itself performs the action
+ *   and finishes the job, and its result is delivered as usual (D41).
+ *
+ * Either way the decision is claimed with one conditional update, so two clicks cannot
+ * make the same thing happen twice.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: approvalId } = await params;
@@ -39,6 +46,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // The approval belongs to a run of this agent, and the agent must still be the user's.
   const agent = await getOwnedAgent(user.id, found.agentId);
   if (!agent) return jsonError("Agent not found.", 404);
+
+  // A background run is waiting for this answer, so hand it over rather than doing the
+  // work here. Claiming first means the card reads as decided straight away, and means a
+  // second click can't send the event twice.
+  if (found.taskId || found.trigger !== "chat") {
+    const claimed = await claimApproval(user.id, approvalId, decision);
+    if (!claimed) return jsonError("That request had already been decided or has expired.", 409);
+
+    try {
+      await inngest.send({
+        id: `approval-${approvalId}-${decision}`,
+        name: "approval/decided",
+        data: { approvalId, decision },
+      });
+    } catch (error) {
+      console.error("Couldn't tell the waiting run about an approval:", error);
+      // The decision is recorded, so the run picks it up from the row when its wait ends.
+      return jsonError(
+        "Your decision was saved, but the agent couldn't be reached. It will act on it when it next checks.",
+        502,
+        { status: decision },
+      );
+    }
+
+    return Response.json({ status: decision, background: true });
+  }
 
   // Resuming is a turn in the conversation like any other, so it takes the same lease (D30).
   const conversationId = found.conversationId;

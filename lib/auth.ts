@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { AuthOptions } from "next-auth";
 import { getServerSession } from "next-auth";
 import GithubProvider from "next-auth/providers/github";
@@ -53,8 +54,13 @@ export const authOptions: AuthOptions = {
 /**
  * The signed-in user's row from the database, or null if nobody is signed in.
  * Use this in server components and server actions.
+ *
+ * Wrapped in React's `cache()`, so within one page render the workspace layout and the
+ * page share a single lookup instead of each paying a database round-trip — which, with
+ * the database on another continent, is a noticeable part of every page load.
+ * (Outside a render, e.g. in route handlers, `cache` simply calls through.)
  */
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async function getCurrentUser() {
   const session = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return null;
@@ -70,4 +76,4 @@ export async function getCurrentUser() {
     .onConflictDoUpdate({ target: users.email, set: { email } })
     .returning();
   return created ?? null;
-}
+});
