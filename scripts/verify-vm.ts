@@ -162,6 +162,19 @@ async function main() {
       console.log(`       first call (starts the VM) took ${((Date.now() - t1) / 1000).toFixed(1)}s`);
       check("python runs, starting the VM by itself", "output" in py && (py.output as Out).stdout.trim() === "45", py);
       check("the VM is now running", (await vmLib.getSandbox(user.id, agent.id)).status === "running");
+
+      // The run is also shown in a terminal window on the VM's screen, following a log.
+      const onScreen = await Sandbox.connect((await providerIdOf())!);
+      const viewer = await onScreen.commands.run("pgrep -f '\\.show\\.sh' || true");
+      check("a terminal window shows the run on the VM's screen", viewer.stdout.trim().length > 0, viewer.stdout);
+      const logs = await onScreen.commands.run("cat /home/user/.omnix/run-*.log; cat /home/user/.omnix/run-*.exit");
+      check("the window's log has the output and exit code", /45/.test(logs.stdout) && /\b0\b/.test(logs.stdout), logs.stdout);
+      const shotAt = process.argv.indexOf("--shot");
+      if (shotAt !== -1 && process.argv[shotAt + 1]) {
+        await onScreen.wait(1500);
+        (await import("node:fs")).writeFileSync(process.argv[shotAt + 1], await onScreen.screenshot());
+        console.log(`       screenshot of the VM's screen: ${process.argv[shotAt + 1]}`);
+      }
       const bad = await run("python", "raise ValueError('boom')");
       check(
         "a failing program is output, with its error",

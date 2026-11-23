@@ -45,7 +45,7 @@ import { cn } from "@/lib/utils";
 import { AgentAvatar } from "./AgentAvatar";
 import AgentConfigPanel, { type AgentConfig, type ConfigTab } from "./AgentConfigPanel";
 import { ApprovalCard } from "./ApprovalCard";
-import ChatRunPanel from "./ChatRunPanel";
+import ChatRunPanel, { type SavedRun } from "./ChatRunPanel";
 import { Markdown } from "./Markdown";
 
 /** Prompts offered in an empty chat (05-chat-empty). */
@@ -96,6 +96,8 @@ type Props = {
   initialTab?: ConfigTab | null;
   /** The agent's VM, for the run panel. */
   vm: { ready: boolean; initial: SandboxView };
+  /** The open chat's most recent saved run, so the panel has it after a reload. */
+  savedRun: SavedRun | null;
 };
 
 /**
@@ -130,6 +132,7 @@ export default function AgentChat({
   initialPrompt = null,
   initialTab = null,
   vm,
+  savedRun,
 }: Props) {
   const router = useRouter();
   /** The configuration drawer: closed to start (05/06), open on a tab (07–10). */
@@ -744,6 +747,8 @@ export default function AgentChat({
           <ChatRunPanel
             agentId={agent.id}
             run={currentRun}
+            // Only for the chat it belongs to: not after New chat, nor in another chat.
+            savedRun={savedRun?.conversationId === conversationId ? savedRun : null}
             vm={vm}
             onStop={() => abortRef.current?.abort()}
             onClose={closeRun}

@@ -51,7 +51,73 @@ function rowsFor(reply: ChatMessage): Row[] {
   return rows;
 }
 
-type Status = "working" | "waiting" | "done" | "stopped";
+type Status = "working" | "waiting" | "done" | "failed" | "stopped";
+
+/**
+ * The open chat's most recent saved run, as the page sends it: just what the panel draws.
+ * Built on the server from `run_steps` with the same rows as the full run page.
+ */
+export type SavedRun = {
+  id: string;
+  conversationId: string;
+  status: "queued" | "running" | "waiting_approval" | "succeeded" | "failed" | "cancelled";
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  rows: { key: string; label: string; state: RunStepState; at: string | null }[];
+};
+
+const SAVED_STATUS: Record<SavedRun["status"], Status> = {
+  queued: "working",
+  running: "working",
+  waiting_approval: "waiting",
+  succeeded: "done",
+  failed: "failed",
+  cancelled: "stopped",
+};
+
+/** One run, live or saved, as the panel draws it. */
+type View = {
+  title: string;
+  status: Status;
+  rows: Row[];
+  startedAt: number;
+  finishedAt: number | null;
+  notes: string[];
+  /** A run streaming into this page, which Stop can end. */
+  streaming: boolean;
+  /** The full record, for a saved run. */
+  href: string | null;
+  error: string | null;
+};
+
+function liveView(reply: ChatMessage): View {
+  return {
+    title: "This run",
+    status: statusOf(reply),
+    rows: rowsFor(reply),
+    startedAt: reply.startedAt ?? Date.now(),
+    finishedAt: reply.finishedAt ?? null,
+    notes: reply.notes ?? [],
+    streaming: true,
+    href: null,
+    error: null,
+  };
+}
+
+function savedView(saved: SavedRun, agentId: string): View {
+  return {
+    title: "Last run",
+    status: SAVED_STATUS[saved.status],
+    rows: saved.rows.map((row) => ({ ...row, at: row.at ? new Date(row.at).getTime() : null })),
+    startedAt: new Date(saved.startedAt).getTime(),
+    finishedAt: saved.finishedAt ? new Date(saved.finishedAt).getTime() : null,
+    notes: [],
+    streaming: false,
+    href: `/workspace/agent/${agentId}/runs/${saved.id}`,
+    error: saved.error,
+  };
+}
 
 function statusOf(reply: ChatMessage): Status {
   if (reply.approval && (reply.approvalState === "pending" || reply.approvalState === "deciding")) return "waiting";
@@ -90,6 +156,11 @@ const BADGE: Record<Status, { label: string; className: string; dot: string }> =
     className: "bg-[#16A34A]/10 text-[#15803D] dark:bg-[#22C55E]/15 dark:text-[#4ADE80]",
     dot: "bg-[#22C55E]",
   },
+  failed: {
+    label: "Failed",
+    className: "bg-destructive/10 text-destructive dark:bg-[#F87171]/15 dark:text-[#F87171]",
+    dot: "bg-destructive",
+  },
   stopped: {
     label: "Stopped",
     className: "bg-muted text-run-panel-muted dark:bg-white/10",
@@ -104,6 +175,7 @@ const PREVIEW = ["Reads your message", "Uses its tools", "Writes the reply"];
 export default function ChatRunPanel({
   agentId,
   run,
+  savedRun,
   vm,
   onStop,
   onClose,
@@ -113,10 +185,14 @@ export default function ChatRunPanel({
   vm: { ready: boolean; initial: SandboxView };
   /** The reply this panel follows: the latest one sent from this page, or null before any. */
   run: ChatMessage | null;
+  /** The open chat's last saved run, shown until this page starts one of its own. */
+  savedRun: SavedRun | null;
   onStop: () => void;
   onClose: () => void;
 }) {
-  const status = run ? statusOf(run) : null;
+  // A run started here wins; otherwise the chat's last saved one; otherwise nothing yet.
+  const view = run ? liveView(run) : savedRun ? savedView(savedRun, agentId) : null;
+  const status = view?.status ?? null;
   const live = status === "working" || status === "waiting";
 
   // Tick once a second while the run is live, so the clock moves.
@@ -127,9 +203,9 @@ export default function ChatRunPanel({
     return () => window.clearInterval(timer);
   }, [live]);
 
-  const startedAt = run?.startedAt ?? null;
-  const elapsed = startedAt ? clock((live ? now : (run?.finishedAt ?? now)) - startedAt) : "00:00:00";
-  const rows = run ? rowsFor(run) : [];
+  const startedAt = view?.startedAt ?? null;
+  const elapsed = startedAt ? clock((live ? now : (view?.finishedAt ?? now)) - startedAt) : "00:00:00";
+  const rows = view?.rows ?? [];
   /**
    * Changes whenever the agent starts or finishes a VM tool step, so the VM card re-checks
    * at once: the agent may just have started or resumed the VM itself.
@@ -147,17 +223,17 @@ export default function ChatRunPanel({
       {/* Header: which run, its state, how long, and the way to the full record. Same 64px
           as the chat header, so the two header lines meet; stays put while the panel scrolls. */}
       <div className="sticky top-0 z-10 -mx-5 mb-3 flex h-16 shrink-0 items-center gap-2.5 border-b border-border bg-run-panel px-5 dark:border-white/[0.08]">
-        <span className="font-semibold">{run ? "This run" : "Run"}</span>
+        <span className="font-semibold">{view?.title ?? "Run"}</span>
         <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-caption font-medium ${(badge ?? IDLE).className}`}>
           <span className={`size-2 rounded-full ${(badge ?? IDLE).dot}`} />
           {(badge ?? IDLE).label}
         </span>
         <span className="flex-1" />
-        {run && <span className="font-mono text-caption text-run-panel-muted tabular-nums">{elapsed}</span>}
+        {view && <span className="font-mono text-caption text-run-panel-muted tabular-nums">{elapsed}</span>}
         <Link
-          href={`/workspace/agent/${agentId}/runs`}
-          aria-label="All runs"
-          title="All runs"
+          href={view?.href ?? `/workspace/agent/${agentId}/runs`}
+          aria-label={view?.href ? "Open this run in full" : "All runs"}
+          title={view?.href ? "Open this run in full" : "All runs"}
           className="flex size-8 items-center justify-center rounded-[10px] text-run-panel-muted hover:bg-run-panel-raised hover:text-run-panel-foreground"
         >
           <ExternalLink className="size-4" />
@@ -195,7 +271,7 @@ export default function ChatRunPanel({
         </ol>
       )}
 
-      {run?.notes?.map((note, index) => (
+      {view?.notes.map((note, index) => (
         <p key={index} className="mt-1 flex gap-2 rounded-md bg-run-panel-raised px-3 py-2 text-body-s text-run-panel-muted">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning-text dark:text-[#FCD34D]" />
           {note}
@@ -205,7 +281,7 @@ export default function ChatRunPanel({
       <div className="flex-1" />
 
       {/* Footer: what is happening now, and the one control that works today */}
-      {!run && (
+      {!view && (
         <div className="mt-2 flex min-h-[52px] items-center gap-3 rounded-lg bg-run-panel-raised py-2 pr-2 pl-4">
           <span className="size-2 shrink-0 rounded-full bg-run-panel-muted" />
           <span className="flex-1 text-body-s text-run-panel-muted">
@@ -213,9 +289,20 @@ export default function ChatRunPanel({
           </span>
         </div>
       )}
-      {run && (
+      {view && (
         <div className="mt-2 flex min-h-[52px] items-center gap-3 rounded-lg bg-run-panel-raised py-2 pr-2 pl-4">
-          {status === "working" ? (
+          {status === "working" && !view.streaming ? (
+            // Saved, but still going: started in another tab, or a task. Follow it there.
+            <>
+              <Spinner />
+              <span className="flex-1 text-run-panel-muted">Still running. Open the run to follow it.</span>
+            </>
+          ) : status === "failed" ? (
+            <>
+              <TriangleAlert className="size-4 shrink-0 text-destructive dark:text-[#F87171]" />
+              <span className="flex-1 text-run-panel-muted">{view.error ?? "The run failed."}</span>
+            </>
+          ) : status === "working" ? (
             <>
               <Spinner />
               <span className="flex-1 text-run-panel-muted">Agent is working…</span>

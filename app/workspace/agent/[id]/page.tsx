@@ -1,9 +1,12 @@
 import { notFound } from "next/navigation";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 
 import AgentChat from "@/components/custom/workspace/AgentChat";
-import { conversations, db, messages } from "@/db";
+import type { SavedRun } from "@/components/custom/workspace/ChatRunPanel";
+import { buildRunRows } from "@/components/custom/workspace/RunTimeline";
+import { conversations, db, messages, runs } from "@/db";
 import { listPendingForConversation } from "@/lib/agent/approvals";
+import { getRunDetail } from "@/lib/agent/runs";
 import { CHAT_MODEL, hasModelKey } from "@/lib/ai";
 import { modelLabel } from "@/lib/format";
 import type { ConfigTab } from "@/components/custom/workspace/AgentConfigPanel";
@@ -71,7 +74,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
 
   // The reply and any card still waiting in it. An approval outlives the stream that
   // drew it, so reopening a chat has to show it again (decision D35).
-  const [history, pending] = activeId
+  const [history, pending, latestRun] = activeId
     ? await Promise.all([
         db
           .select({ id: messages.id, role: messages.role, content: messages.content })
@@ -79,8 +82,36 @@ export default async function AgentPage({ params, searchParams }: Props) {
           .where(eq(messages.conversationId, activeId))
           .orderBy(asc(messages.createdAt)),
         listPendingForConversation(user.id, activeId),
+        db
+          .select({ id: runs.id })
+          .from(runs)
+          .where(and(eq(runs.conversationId, activeId), eq(runs.userId, user.id)))
+          .orderBy(desc(runs.startedAt))
+          .limit(1),
       ])
-    : [[], []];
+    : [[], [], []];
+
+  // That chat's most recent run, for the run panel: so its steps are still there after a
+  // reload or when the chat is reopened. Only what the panel draws goes to the browser;
+  // the payloads stay on the runs page.
+  const detail = latestRun[0] ? await getRunDetail(latestRun[0].id, user.id) : null;
+  const savedRun: SavedRun | null =
+    detail && activeId
+      ? {
+          id: detail.run.id,
+          conversationId: activeId,
+          status: detail.run.status,
+          error: detail.run.error,
+          startedAt: detail.run.startedAt.toISOString(),
+          finishedAt: detail.run.finishedAt?.toISOString() ?? null,
+          rows: buildRunRows(detail.steps, detail.run).rows.map((row) => ({
+            key: row.key,
+            label: row.label,
+            state: row.state,
+            at: row.steps.length ? row.at.toISOString() : null,
+          })),
+        }
+      : null;
 
   return (
     <AgentChat
@@ -116,6 +147,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
       initialPrompt={initialPrompt}
       initialTab={initialTab}
       vm={{ ready: hasSandboxKey(), initial: vm }}
+      savedRun={savedRun}
     />
   );
 }

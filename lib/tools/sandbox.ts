@@ -34,11 +34,57 @@ const RUN_TIMEOUT_MS = 90_000;
 /** Starting a VM takes ~10 s; these tools get room for that on top of their own work. */
 const VM_TOOL_TIMEOUT_MS = 60_000;
 
-/** What the E2B desktop image actually has. Node isn't installed there (checked live). */
+/**
+ * What the E2B desktop image actually has. Node isn't installed there (checked live).
+ * Python runs unbuffered (`-u`) so its output reaches the on-screen terminal line by line.
+ */
 const LANGUAGES = {
-  python: { file: "py", command: "python3" },
-  bash: { file: "sh", command: "bash" },
+  python: { file: "py", command: "python3 -u", shown: "python3" },
+  bash: { file: "sh", command: "bash", shown: "bash" },
 } as const;
+
+/**
+ * Opens a terminal window on the VM's desktop that shows the program and then follows its
+ * output live, ending with the exit code: what the user sees on the live screen while the
+ * agent's code runs. It only *watches* a log; the program itself runs once, in `execute`,
+ * whose captured output is what goes back to the model.
+ *
+ * One window at a time: the previous one is closed first. The window closes itself two
+ * minutes after the program ends. Anything going wrong here is ignored — seeing the code
+ * run is a nicety, and must never stop it running.
+ */
+async function showInTerminal(vm: Sandbox, run: { file: string; log: string; exit: string; language: Language }) {
+  const viewer = run.file.replace(/\.\w+$/, ".show.sh");
+  const name = path.posix.basename(run.file);
+  const script = [
+    "printf '\\033[1;36mThe agent is running %s\\033[0m\\n\\n' " + `'${run.language}'`,
+    `cat -n '${run.file}'`,
+    // The model's code often has no final newline; keep the command on a line of its own.
+    "echo",
+    `printf '\\n\\033[1;33m$ ${LANGUAGES[run.language].shown} ${name}\\033[0m\\n'`,
+    `touch '${run.log}'`,
+    `tail -n +1 -f '${run.log}' & TAIL=$!`,
+    // Wait for the exit code (at most ~2 minutes: a run killed by its timeout writes none).
+    `for i in $(seq 1 600); do [ -f '${run.exit}' ] && break; sleep 0.2; done`,
+    "sleep 0.3; kill $TAIL 2>/dev/null",
+    `CODE=$(cat '${run.exit}' 2>/dev/null || echo '?')`,
+    `if [ "$CODE" = 0 ]; then C=32; else C=31; fi`,
+    `printf '\\n\\033[1;%sm[exit %s]\\033[0m\\n' "$C" "$CODE"`,
+    "sleep 120",
+  ].join("\n");
+
+  try {
+    await vm.files.write(viewer, script);
+    // Close the last run's window (its viewer script ending closes the terminal).
+    await vm.commands.run("pkill -f '/home/user/.omnix/.*\\.show\\.sh' || true", { timeoutMs: 5_000 });
+    await vm.commands.run(
+      `xfce4-terminal --title='Agent · ${run.language}' --geometry=110x32+40+40 -x bash '${viewer}'`,
+      { background: true, envs: { DISPLAY: ":0" } },
+    );
+  } catch (error) {
+    console.error("Couldn't show the run in a terminal on the VM's screen:", error);
+  }
+}
 type Language = keyof typeof LANGUAGES;
 
 /** Cuts long text and says so, keeping the start (where errors and headers usually are). */
@@ -105,12 +151,25 @@ export const sandboxRunCode: ToolDefinition = {
     if ("error" in got) return got;
 
     // The program goes in a file rather than on a command line: no quoting to get wrong.
-    const file = `${HOME}/.omnix/run-${crypto.randomUUID().slice(0, 8)}.${spec.file}`;
+    // Every path here is ours, made from a random id; nothing the model wrote is in a command.
+    const id = crypto.randomUUID().slice(0, 8);
+    const file = `${HOME}/.omnix/run-${id}.${spec.file}`;
+    const log = `${HOME}/.omnix/run-${id}.log`;
+    const exit = `${HOME}/.omnix/run-${id}.exit`;
     await got.vm.files.write(file, String(args.code));
+
+    // So the user can watch it on the live screen. Never in the way of the run itself.
+    await showInTerminal(got.vm, { file, log, exit, language });
+
+    // stdout and stderr stay separate for the model, and are also copied to the log the
+    // terminal follows; the exit code is kept (pipefail) and written for the terminal too.
+    const command =
+      `set -o pipefail; { ${spec.command} '${file}' 2> >(tee -a '${log}' >&2); } | tee -a '${log}'; ` +
+      `CODE=$?; echo $CODE > '${exit}'; exit $CODE`;
 
     const started = Date.now();
     try {
-      const result = await got.vm.commands.run(`${spec.command} ${file}`, {
+      const result = await got.vm.commands.run(command, {
         cwd: HOME,
         timeoutMs: RUN_TIMEOUT_MS,
         signal: ctx.signal,
