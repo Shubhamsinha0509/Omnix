@@ -1,0 +1,373 @@
+import { and, eq } from "drizzle-orm";
+import { Sandbox, SandboxNotFoundError } from "@e2b/desktop";
+
+import { db, sandboxes, type SandboxRow } from "@/db";
+
+/**
+ * Each agent's own VM (D15, docs/06-virtual-machines.md): an E2B desktop sandbox, so it can
+ * run code, use a real browser, and show its screen live in the run panel.
+ *
+ * Server only. Callers check that the agent belongs to the user first; every function here
+ * also scopes its writes to `userId`, so a mistake there can't reach someone else's VM.
+ *
+ * The rules that matter:
+ * - **One VM per agent.** Each change first *claims* the row by moving it to an in-between
+ *   status (`starting`, `pausing`, `stopping`) with a conditional update. Whoever wins the
+ *   claim does the work; a second click finds the claim and gets the current state back.
+ * - **Idle VMs pause themselves.** E2B pauses a VM `IDLE_MS` after it was started or
+ *   resumed (`onTimeout: "pause"`), keeping its disk and memory and costing no compute.
+ *   We don't hear about that, so `getSandbox` asks E2B whenever our record says the time
+ *   has passed.
+ * - **Paused VMs are kept forever by E2B** until killed, so deleting an agent must kill
+ *   its VM (`destroySandbox`), or it would sit there for good.
+ * - **No secrets in the VM.** Nothing from our environment is passed in; the VM gets only
+ *   what a single tool call needs, later (docs/07-security.md).
+ */
+
+/** How long a VM runs after a start or resume before E2B pauses it. */
+export const IDLE_MS = 10 * 60 * 1000;
+
+/** The desktop's screen size, which is also the live stream's. */
+const RESOLUTION: [number, number] = [1280, 800];
+
+/** A claim older than this was left by a request that died; it may be taken over. */
+const STALE_CLAIM_MS = 2 * 60 * 1000;
+
+export type SandboxStatus = SandboxRow["status"];
+
+/** What the browser may know about an agent's VM. E2B's own id stays on the server. */
+export type SandboxView = {
+  status: SandboxStatus;
+  error: string | null;
+  runningSince: string | null;
+  expiresAt: string | null;
+  usedSeconds: number;
+};
+
+export type SandboxResult = { error: string } | { vm: SandboxView };
+
+const OFF: SandboxView = { status: "stopped", error: null, runningSince: null, expiresAt: null, usedSeconds: 0 };
+
+/** True when E2B is configured. Without a key there are no VMs, and the UI says so. */
+export function hasSandboxKey() {
+  return Boolean(process.env.E2B_API_KEY);
+}
+
+const NO_KEY = "VMs aren't set up yet: add E2B_API_KEY to .env and restart the dev server.";
+
+function toView(row: SandboxRow | undefined): SandboxView {
+  if (!row) return OFF;
+  return {
+    status: row.status,
+    error: row.error,
+    runningSince: row.runningSince?.toISOString() ?? null,
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+    usedSeconds: row.usedSeconds,
+  };
+}
+
+/** Seconds of the current running stretch, counted up to `until` (or the auto-pause). */
+function stretchSeconds(row: SandboxRow, until = new Date()) {
+  if (!row.runningSince) return 0;
+  const end = row.expiresAt && row.expiresAt < until ? row.expiresAt : until;
+  return Math.max(0, Math.round((end.getTime() - row.runningSince.getTime()) / 1000));
+}
+
+async function readRow(userId: number, agentId: string) {
+  const [row] = await db
+    .select()
+    .from(sandboxes)
+    .where(and(eq(sandboxes.agentId, agentId), eq(sandboxes.userId, userId)))
+    .limit(1);
+  return row;
+}
+
+/** Writes the outcome of a change. Scoped to the user, like every write here. */
+async function save(userId: number, agentId: string, values: Partial<SandboxRow>) {
+  const [row] = await db
+    .update(sandboxes)
+    .set({ ...values, updatedAt: new Date() })
+    .where(and(eq(sandboxes.agentId, agentId), eq(sandboxes.userId, userId)))
+    .returning();
+  return row;
+}
+
+/**
+ * Moves the row from one of `from` to `to`, and says whether this request won. A claim
+ * left behind by a request that died (older than `STALE_CLAIM_MS`) counts as free.
+ */
+async function claim(
+  userId: number,
+  agentId: string,
+  row: SandboxRow,
+  from: SandboxStatus[],
+  to: SandboxStatus,
+): Promise<boolean> {
+  const stale = ["starting", "pausing", "stopping"].includes(row.status) &&
+    Date.now() - row.updatedAt.getTime() > STALE_CLAIM_MS;
+  if (!from.includes(row.status) && !stale) return false;
+
+  const [won] = await db
+    .update(sandboxes)
+    .set({ status: to, error: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(sandboxes.agentId, agentId),
+        eq(sandboxes.userId, userId),
+        // Only if it is still in the state we read: of two requests, one wins. (Not
+        // `updatedAt`: Postgres keeps microseconds a JS Date can't, so it never matches.)
+        eq(sandboxes.status, row.status),
+      ),
+    )
+    .returning({ agentId: sandboxes.agentId });
+  return Boolean(won);
+}
+
+/** The row for this agent, created as "stopped" the first time anyone asks. */
+async function ensureRow(userId: number, agentId: string) {
+  await db.insert(sandboxes).values({ agentId, userId }).onConflictDoNothing();
+  return readRow(userId, agentId);
+}
+
+/**
+ * The agent's VM as it is now. If our record says running but the idle time has passed,
+ * E2B has most likely paused it; ask, and bring the record up to date.
+ */
+export async function getSandbox(userId: number, agentId: string): Promise<SandboxView> {
+  const row = await readRow(userId, agentId);
+  if (!row) return OFF;
+  if (row.status !== "running" || !row.providerId || !row.expiresAt || row.expiresAt > new Date()) {
+    return toView(row);
+  }
+  if (!hasSandboxKey()) return toView(row);
+
+  try {
+    const info = await Sandbox.getInfo(row.providerId);
+    if (info.state === "running") {
+      // Someone kept it alive (a resume elsewhere moved the deadline): just follow E2B.
+      return toView(await save(userId, agentId, { expiresAt: info.endAt }));
+    }
+    return toView(
+      await save(userId, agentId, {
+        status: "paused",
+        usedSeconds: row.usedSeconds + stretchSeconds(row),
+        runningSince: null,
+        expiresAt: null,
+      }),
+    );
+  } catch (error) {
+    if (error instanceof SandboxNotFoundError) {
+      return toView(
+        await save(userId, agentId, {
+          status: "stopped",
+          providerId: null,
+          usedSeconds: row.usedSeconds + stretchSeconds(row),
+          runningSince: null,
+          expiresAt: null,
+        }),
+      );
+    }
+    // E2B unreachable: show what we last knew rather than failing the page.
+    console.error("Couldn't check the VM's state:", error);
+    return toView(row);
+  }
+}
+
+/**
+ * Starts the agent's VM, or resumes it if it is paused. Returns at once if it is already
+ * running or another request is starting it.
+ */
+export async function startSandbox(userId: number, agentId: string): Promise<SandboxResult> {
+  if (!hasSandboxKey()) return { error: NO_KEY };
+
+  const row = await ensureRow(userId, agentId);
+  if (!row) return { error: "Couldn't find this agent's VM record. Please try again." };
+  if (!(await claim(userId, agentId, row, ["stopped", "paused", "error"], "starting"))) {
+    return { vm: toView(await readRow(userId, agentId)) };
+  }
+
+  const startedAt = new Date();
+  try {
+    let vm: Sandbox | null = null;
+
+    // A paused VM comes back with its files and memory; connecting resumes it.
+    if (row.providerId) {
+      try {
+        vm = await Sandbox.connect(row.providerId, { timeoutMs: IDLE_MS });
+      } catch (error) {
+        // Gone on E2B's side (killed elsewhere): start a fresh one below.
+        if (!(error instanceof SandboxNotFoundError)) throw error;
+      }
+    }
+
+    vm ??= await Sandbox.create({
+      timeoutMs: IDLE_MS,
+      lifecycle: { onTimeout: "pause", autoResume: false },
+      // Only our own ids: nothing personal, nothing secret.
+      metadata: { agentId },
+      resolution: RESOLUTION,
+      // The live screen is an iframe, and a browser can't add E2B's traffic-token header
+      // to one, so the VM's addresses must accept traffic without it (D51). The screen
+      // itself still needs a fresh password on every open.
+      network: { allowPublicTraffic: true },
+    });
+
+    const saved = await save(userId, agentId, {
+      status: "running",
+      providerId: vm.sandboxId,
+      error: null,
+      runningSince: startedAt,
+      expiresAt: new Date(startedAt.getTime() + IDLE_MS),
+    });
+    return { vm: toView(saved) };
+  } catch (error) {
+    console.error("Failed to start the VM:", error);
+    const saved = await save(userId, agentId, {
+      status: "error",
+      error: "The VM didn't start. Please try again in a moment.",
+      runningSince: null,
+      expiresAt: null,
+    });
+    return { error: saved?.error ?? "The VM didn't start." };
+  }
+}
+
+/** Pauses a running VM: its files and memory are kept, and it costs nothing while paused. */
+export async function pauseSandbox(userId: number, agentId: string): Promise<SandboxResult> {
+  if (!hasSandboxKey()) return { error: NO_KEY };
+
+  const row = await readRow(userId, agentId);
+  if (!row?.providerId) return { vm: toView(row) };
+  if (!(await claim(userId, agentId, row, ["running"], "pausing"))) {
+    return { vm: toView(await readRow(userId, agentId)) };
+  }
+
+  const pausedAt = new Date();
+  try {
+    await Sandbox.pause(row.providerId);
+    const saved = await save(userId, agentId, {
+      status: "paused",
+      usedSeconds: row.usedSeconds + stretchSeconds(row, pausedAt),
+      runningSince: null,
+      expiresAt: null,
+    });
+    return { vm: toView(saved) };
+  } catch (error) {
+    if (error instanceof SandboxNotFoundError) {
+      const saved = await save(userId, agentId, {
+        status: "stopped",
+        providerId: null,
+        usedSeconds: row.usedSeconds + stretchSeconds(row, pausedAt),
+        runningSince: null,
+        expiresAt: null,
+      });
+      return { vm: toView(saved) };
+    }
+    console.error("Failed to pause the VM:", error);
+    // It is still running: put the record back so the user can try again.
+    await save(userId, agentId, { status: "running", error: "Couldn't pause the VM. Please try again." });
+    return { error: "Couldn't pause the VM. Please try again." };
+  }
+}
+
+/** Stops the VM for good: E2B deletes it with everything on it. The usage total stays. */
+export async function stopSandbox(userId: number, agentId: string): Promise<SandboxResult> {
+  if (!hasSandboxKey()) return { error: NO_KEY };
+
+  const row = await readRow(userId, agentId);
+  if (!row?.providerId) return { vm: toView(row) };
+  if (!(await claim(userId, agentId, row, ["running", "paused", "error"], "stopping"))) {
+    return { vm: toView(await readRow(userId, agentId)) };
+  }
+
+  const stoppedAt = new Date();
+  try {
+    // False when E2B no longer has it, which is the same outcome.
+    await Sandbox.kill(row.providerId);
+    const saved = await save(userId, agentId, {
+      status: "stopped",
+      providerId: null,
+      error: null,
+      usedSeconds: row.usedSeconds + (row.status === "running" ? stretchSeconds(row, stoppedAt) : 0),
+      runningSince: null,
+      expiresAt: null,
+    });
+    return { vm: toView(saved) };
+  } catch (error) {
+    console.error("Failed to stop the VM:", error);
+    await save(userId, agentId, { status: row.status, error: "Couldn't stop the VM. Please try again." });
+    return { error: "Couldn't stop the VM. Please try again." };
+  }
+}
+
+/** Links to the VM's live screen: one to watch, one to use the mouse and keyboard. */
+export type SandboxScreen = { viewUrl: string; controlUrl: string };
+
+/**
+ * Opens the running VM's live screen (an E2B desktop VNC stream) and returns its links.
+ *
+ * The stream is password-protected, and the SDK holds that password only in the object
+ * that started the stream, so each call restarts it with a fresh one: links from an earlier
+ * call stop working, which is also what keeps an old link from being reused. The links are
+ * for the owner's browser only and are never stored. Watching counts as using the VM, so
+ * this also pushes its auto-pause back by `IDLE_MS`.
+ */
+export async function openSandboxScreen(
+  userId: number,
+  agentId: string,
+): Promise<{ error: string } | { screen: SandboxScreen; vm: SandboxView }> {
+  if (!hasSandboxKey()) return { error: NO_KEY };
+
+  const row = await readRow(userId, agentId);
+  if (row?.status !== "running" || !row.providerId) return { error: "Start the VM to see its screen." };
+
+  try {
+    const vm = await Sandbox.connect(row.providerId, { timeoutMs: IDLE_MS });
+    try {
+      await vm.stream.stop();
+    } catch {
+      // Not running yet: nothing to stop.
+    }
+    await vm.stream.start({ requireAuth: true });
+    const authKey = vm.stream.getAuthKey();
+    const base = { autoConnect: true, resize: "scale" as const, authKey };
+
+    const saved = await save(userId, agentId, { expiresAt: new Date(Date.now() + IDLE_MS) });
+    return {
+      screen: {
+        viewUrl: vm.stream.getUrl({ ...base, viewOnly: true }),
+        controlUrl: vm.stream.getUrl({ ...base, viewOnly: false }),
+      },
+      vm: toView(saved),
+    };
+  } catch (error) {
+    if (error instanceof SandboxNotFoundError) {
+      await save(userId, agentId, {
+        status: "stopped",
+        providerId: null,
+        usedSeconds: row.usedSeconds + stretchSeconds(row),
+        runningSince: null,
+        expiresAt: null,
+      });
+      return { error: "The VM is no longer running. Start it again to see its screen." };
+    }
+    console.error("Failed to open the VM's screen:", error);
+    return { error: "Couldn't open the VM's screen. Please try again." };
+  }
+}
+
+/**
+ * Kills an agent's VM before the agent is deleted. Paused VMs are never removed by E2B on
+ * their own, so skipping this would leave the user's files there for good. The row goes
+ * with the agent (cascade). Failures are logged, not thrown: deleting the agent must not
+ * depend on E2B being up, and the VM is tagged with the agent id to find it later.
+ */
+export async function destroySandbox(userId: number, agentId: string) {
+  const row = await readRow(userId, agentId);
+  if (!row?.providerId || !hasSandboxKey()) return;
+  try {
+    await Sandbox.kill(row.providerId);
+  } catch (error) {
+    console.error(`Couldn't kill VM ${row.providerId} of deleted agent ${agentId}:`, error);
+  }
+}

@@ -8,6 +8,7 @@ import { agentTools, agents, db } from "@/db";
 import { getOwnedAgent } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 import { getConnection } from "@/lib/integrations/connections";
+import { destroySandbox } from "@/lib/sandbox";
 import { TOOLS, isNativeTool } from "@/lib/tools";
 import { AVATAR_SEED_PATTERN } from "@/lib/avatars";
 import { MAX_AGENT_INSTRUCTIONS, MAX_AGENT_NAME } from "@/lib/agent-limits";
@@ -130,6 +131,10 @@ export async function deleteAgent(agentId: string): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You need to be signed in to delete an agent." };
   if (!UUID.test(agentId)) return { error: "Agent not found." };
+
+  // E2B keeps a paused VM until it is killed, so the agent's VM goes first. Only once we
+  // know the agent is theirs; a failure is logged and doesn't block the delete.
+  if (await getOwnedAgent(user.id, agentId)) await destroySandbox(user.id, agentId);
 
   try {
     const deleted = await db

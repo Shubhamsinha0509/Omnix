@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat Run Panel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 06-chat-messages on the left, the 13-live-run panel docked on the right (where the config drawer opens), with a VM card at its top. */
+body{margin:0;background:#F7F8FC}
+[hidden]{display:none!important}
+.omx{--bg:#F7F8FC;--surface:#FFFFFF;--muted:#F1F2F8;--glass:rgba(255,255,255,.84);--fg:#14162A;--fg2:#646A85;--fg3:#8C92AC;--onp:#FFFFFF;--primary:#14162A;--accent:#EEF0FF;--accent-fg:#4338CA;--brand:#6366F1;--brand-text:#4F46E5;--brand-fill:#4F46E5;--border:#E7E9F2;--border2:#D7DAE8;--ok:#16A34A;--ok-text:#15803D;--warn:#F59E0B;--warn-bg:#FEF3C7;--warn-text:#B45309;--danger:#DC2626;--run:#14162A;--run2:#1F2236;--run-fg:#F1F2F8;--run-mut:#9AA0B8;--wash1:rgba(124,131,245,.22);--wash2:rgba(165,171,251,.24);--sh-xs:0 1px 2px rgba(20,22,42,.05);--sh-sm:0 1px 2px rgba(20,22,42,.04),0 2px 8px -2px rgba(79,70,229,.08);--sh-md:0 1px 3px rgba(20,22,42,.05),0 8px 24px -6px rgba(79,70,229,.14);--sh-lg:0 2px 6px rgba(20,22,42,.06),0 24px 48px -12px rgba(79,70,229,.22);font-family:Figtree,system-ui,sans-serif;color:var(--fg);background:var(--bg);font-size:14px;line-height:22px;min-height:100vh;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+.omx.dark{--bg:#0C0D1C;--surface:#14162A;--muted:#1F2236;--glass:rgba(20,22,42,.86);--fg:#F7F8FC;--fg2:#B9BED3;--fg3:#8C92AC;--onp:#14162A;--primary:#F7F8FC;--accent:rgba(99,102,241,.18);--accent-fg:#C7CBFE;--brand:#7C83F5;--brand-text:#A5ABFB;--brand-fill:#6366F1;--border:#1F2236;--border2:#33374D;--ok:#22C55E;--ok-text:#22C55E;--warn-bg:rgba(245,158,11,.16);--warn-text:#FCD34D;--danger:#EF4444;--run:#08091A;--run2:#1F2236;--wash1:rgba(99,102,241,.22);--wash2:rgba(67,56,202,.20);--sh-xs:0 1px 2px rgba(0,0,0,.3);--sh-sm:0 1px 2px rgba(0,0,0,.3),0 2px 8px -2px rgba(0,0,0,.4);--sh-md:0 1px 3px rgba(0,0,0,.35),0 8px 24px -6px rgba(0,0,0,.5);--sh-lg:0 2px 6px rgba(0,0,0,.4),0 24px 48px -12px rgba(0,0,0,.6)}
+.omx *{box-sizing:border-box}
+.omx p,.omx h1,.omx h2,.omx h3{margin:0}
+.omx a{color:var(--brand-text);text-decoration:none}
+.omx a:hover{text-decoration:underline}
+.omx button{font-family:inherit}
+.omx :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.h2{font-size:20px;line-height:28px;font-weight:600;letter-spacing:-.005em}
+.h3{font-size:16px;line-height:24px;font-weight:600}
+.s{font-size:13px;line-height:20px}
+.cap{font-size:12px;line-height:16px;font-weight:500}
+.sub{color:var(--fg2)}
+.med{font-weight:500}.semi{font-weight:600}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:16px;font-variant-numeric:tabular-nums}
+.idchip{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:16px;background:var(--muted);color:var(--fg2);padding:2px 6px;border-radius:6px}
+.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.i16{width:16px;height:16px}.i14{width:14px;height:14px}.i20{width:20px;height:20px}.i22{width:22px;height:22px}
+.row{display:flex;align-items:center;gap:12px}
+.col{display:flex;flex-direction:column}
+.grow{flex:1 1 0;min-width:0}
+.app{display:flex;min-height:100vh}
+.sb{width:256px;flex:0 0 256px;background:var(--surface);border-right:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:12px;color:var(--fg);font-weight:500;text-decoration:none}
+.nav .i{color:var(--fg2)}
+.nav.on{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.kbd{margin-left:auto;font-size:12px;line-height:16px;font-weight:500;color:var(--fg2);background:var(--muted);padding:2px 8px;border-radius:999px}
+.count{margin-left:auto;font-size:12px;line-height:16px;font-weight:600;color:#fff;background:var(--brand-fill);padding:2px 8px;border-radius:999px}
+.label{font-size:12px;line-height:16px;font-weight:500;color:var(--fg2);padding:20px 12px 8px}
+.topbar{display:none;height:56px;align-items:center;gap:12px;padding:0 8px 0 4px;background:var(--surface);border-bottom:1px solid var(--border)}
+.main{flex:1 1 0;min-width:0;position:relative;overflow:hidden}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:12px;font-weight:600;font-size:14px;line-height:1;border:1px solid transparent;cursor:pointer;text-decoration:none!important;white-space:nowrap;background:none;color:var(--fg)}
+.btn.sm{height:36px;padding:0 12px;font-weight:500}
+.bs{background:var(--surface);color:var(--fg);border-color:var(--border2);box-shadow:var(--sh-xs)}
+.bb{background:var(--brand-fill);color:#fff}
+.bp{background:var(--primary);color:var(--onp)}
+.ibtn{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;border:0;background:none;color:var(--fg2);cursor:pointer;flex:none}
+.ibtn.on{background:var(--accent);color:var(--brand)}
+.send{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;border:0;background:var(--brand-fill);color:#fff;flex:none}
+.pill{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border2);font-weight:500;white-space:nowrap;color:var(--fg)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;line-height:16px;font-weight:500;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.av{border-radius:50%;flex:none;display:block}
+.ph{color:var(--fg2)}
+.divider{height:1px;background:var(--border);width:100%}
+.bubble{background:var(--primary);color:var(--onp);padding:10px 16px;border-radius:20px 20px 8px 20px;max-width:70%}
+.ava{width:32px;height:32px;border-radius:50%;background:var(--brand-fill);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;flex:none}
+.seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--muted)}
+.seg>button{flex:1 1 0;text-align:center;padding:6px 12px;border-radius:8px;color:var(--fg2);font-weight:500;white-space:nowrap;border:0;background:none;cursor:pointer;font-size:14px}
+.seg>button.on{background:var(--surface);color:var(--fg);box-shadow:var(--sh-xs)}
+/* Run panel (from 13-live-run) */
+.runpanel{background:var(--run);color:var(--run-fg);border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:8px}
+.step{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px}
+.step.cur{background:var(--run2)}
+.ind{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+.ind.done{background:#22C55E;color:#08091A}
+.ind.pend{border:1.5px solid var(--run-mut)}
+.spin{width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(124,131,245,.25);border-top-color:#7C83F5;animation:omxspin 1s linear infinite;flex:none}
+@keyframes omxspin{to{transform:rotate(360deg)}}
+.skel{height:10px;border-radius:999px;background:var(--rp-line2,rgba(255,255,255,.08))}
+/* New for this screen */
+.main.split{display:flex;height:100vh}
+.chatsec{display:flex;flex-direction:column;min-height:0}
+.chatscroll{flex:1 1 auto;overflow:auto}
+/* Docked flush on the right, full height, like the sidebar on the left: one divider, no floating card. */
+.runside{width:440px;flex:0 0 440px;margin:0;display:flex;min-height:0;border-left:1px solid var(--border)}
+.runside .runpanel{flex:1 1 auto;min-height:0;overflow:auto;border-radius:0;box-shadow:none;padding:0 20px 20px;scrollbar-width:none}
+.runside .runpanel::-webkit-scrollbar{display:none}
+/* The panel follows the app theme: light card in light mode, the dark run panel in dark mode. */
+.runside{--run:#FFFFFF;--run2:#F1F2F8;--run-fg:#14162A;--run-mut:#646A85;--rp-edge:#E7E9F2;--rp-line:#E7E9F2;--rp-line2:#D7DAE8;--rp-hover:#F1F2F8;--rp-screen:#F1F2F8;--rp-brand:#4338CA;--rp-brand-bg:#EEF0FF;--rp-ok:#15803D;--rp-ok-bg:rgba(22,163,74,.1);--rp-warn:#B45309;--rp-warn-bg:#FEF3C7;--rp-danger:#DC2626;--rp-danger-line:rgba(220,38,38,.45);--rp-term:#F7F8FC;--rp-term-fg:#14162A}
+.omx.dark .runside{--run:#08091A;--run2:#1F2236;--run-fg:#F1F2F8;--run-mut:#9AA0B8;--rp-edge:transparent;--rp-line:rgba(255,255,255,.08);--rp-line2:rgba(255,255,255,.14);--rp-hover:rgba(255,255,255,.06);--rp-screen:#08091A;--rp-brand:#C7CBFE;--rp-brand-bg:rgba(124,131,245,.18);--rp-ok:#4ADE80;--rp-ok-bg:rgba(34,197,94,.16);--rp-warn:#FCD34D;--rp-warn-bg:rgba(245,158,11,.16);--rp-danger:#F87171;--rp-danger-line:rgba(248,113,113,.45);--rp-term:#08091A;--rp-term-fg:#F1F2F8}
+.runside .runpanel .step.cur{background:var(--run2)}
+/* Same 64px as the chat header, so the two header lines meet in one straight line. */
+.runhead{display:flex;align-items:center;gap:10px;height:64px;flex:none;padding:0 20px;margin:0 -20px 12px;border-bottom:1px solid var(--rp-line);position:sticky;top:0;z-index:2;background:var(--run)}
+.omx:not(.dark) .runhead{border-bottom-color:var(--border)}
+.livebadge{background:var(--rp-brand-bg);color:var(--rp-brand)}
+.rbtn{width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;border:0;background:none;color:var(--run-mut);cursor:pointer;flex:none}
+.rbtn:hover{background:var(--run2);color:var(--run-fg)}
+.seclabel{font-size:12px;line-height:16px;font-weight:500;color:var(--run-mut);padding:8px 4px 4px}
+.vm{background:var(--run2);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.vmicon{width:40px;height:40px;border-radius:12px;background:var(--rp-brand-bg);color:var(--rp-brand);display:flex;align-items:center;justify-content:center;flex:none}
+.vm[data-state="running"] .vmicon{background:var(--rp-ok-bg);color:var(--rp-ok)}
+.vstat{display:inline-flex;align-items:center;gap:6px;font-size:12px;line-height:16px;font-weight:500;color:var(--run-mut)}
+.vm[data-state="running"] .vstat{color:var(--rp-ok)}
+.vm[data-state="starting"] .vstat{color:var(--rp-brand)}
+.vm[data-state="paused"] .vstat{color:var(--rp-warn)}
+.vstat .dot{background:currentColor}
+.dbtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 12px;border-radius:12px;font-weight:500;font-size:14px;line-height:1;border:1px solid var(--rp-line2);background:transparent;color:var(--run-fg);cursor:pointer;white-space:nowrap}
+.dbtn:hover{background:var(--rp-hover)}
+.dbtn.stop{color:var(--rp-danger);border-color:var(--rp-danger-line)}
+.dbtn.go{background:#16A34A;border-color:#16A34A;color:#fff;font-weight:600}
+.dbtn.go:hover{background:#15803D;border-color:#15803D}
+.dbtn[disabled]{opacity:.5;cursor:default}
+.specs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.spec{background:var(--run);border:1px solid var(--rp-line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.spec .cap{color:var(--run-mut)}
+.term{background:var(--rp-term);border:1px solid var(--rp-line);border-radius:12px;padding:10px 12px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:18px;color:var(--run-mut);display:flex;flex-direction:column;max-height:132px;overflow:auto}
+.term b{color:var(--rp-ok);font-weight:500}
+.term .cmd{color:var(--rp-term-fg)}
+.note{font-size:12px;line-height:16px;color:var(--run-mut)}
+.mtabs{display:none;padding:12px 16px 0}
+/* Live screen of the VM (E2B Desktop stream, embedded as an iframe in the app) */
+.screen{display:flex;flex-direction:column;gap:8px}
+.scrbar{display:flex;align-items:center;gap:8px}
+.scrmode{background:var(--rp-hover);color:var(--run-mut)}
+.screen.ctl .scrmode{background:var(--rp-warn-bg);color:var(--rp-warn)}
+.scr{position:relative;aspect-ratio:16/10;max-width:100%;border-radius:12px;overflow:hidden;background:var(--rp-screen);border:1px solid var(--rp-line)}
+.runside .runpanel .vm{background:var(--run2)}
+.vm .scr{background:var(--run)}
+.screen.ctl .scr{border-color:#F59E0B}
+.scr-off,.scr-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:16px;color:var(--run-mut);font-size:12px;line-height:16px}
+.scr-msg{background:rgba(8,9,26,.55);color:var(--run-fg);font-weight:500}
+.desk{position:absolute;inset:0;background:linear-gradient(135deg,#2B2F55,#1B1E38);display:flex;flex-direction:column}
+.win{position:absolute;left:4%;top:5%;right:4%;bottom:13%;background:#FFFFFF;border-radius:6px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.wbar{display:flex;align-items:center;gap:4px;padding:4px 6px;background:#ECEEF5}
+.wbar i{width:6px;height:6px;border-radius:50%;background:#C9CCDA;display:block}
+.url{flex:1;margin-left:6px;background:#FFFFFF;border-radius:4px;padding:1px 6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:8px;line-height:12px;color:#646A85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.page{flex:1;padding:8px 10px;display:flex;flex-direction:column;gap:5px}
+.page .ln{height:5px;border-radius:3px;background:#E3E5EE}
+.page .hd{height:8px;border-radius:3px;background:#14162A;width:70%}
+.page .hl{background:rgba(250,204,21,.55)}
+.task{position:absolute;left:0;right:0;bottom:0;height:11%;background:rgba(8,9,26,.75);display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:8px;color:#B9BED3}
+.cursor{position:absolute;left:30%;top:40%;width:12px;height:12px;animation:omxcur 6s ease-in-out infinite}
+@keyframes omxcur{0%{left:30%;top:40%}30%{left:62%;top:30%}55%{left:48%;top:58%}80%{left:22%;top:66%}100%{left:30%;top:40%}}
+.screen[data-s="paused"] .desk{filter:grayscale(1) brightness(.7)}
+.screen[data-s="paused"] .cursor,.screen.ctl .cursor{animation-play-state:paused}
+.screen[data-s="off"] .desk,.screen[data-s="starting"] .desk{display:none}
+.screen:not([data-s="off"]) .scr-off{display:none}
+.screen.full{position:fixed;inset:24px;z-index:50;background:var(--run);padding:16px;border-radius:20px;box-shadow:0 0 0 100vmax rgba(8,9,26,.7)}
+.screen.full .scr{aspect-ratio:auto;flex:1 1 auto}
+.screen.full .url,.screen.full .task{font-size:12px;line-height:18px}
+@media (prefers-reduced-motion:reduce){.cursor{animation:none}}
+.vmchip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:999px;background:var(--muted);color:var(--fg2);font-size:12px;font-weight:500;white-space:nowrap}
+.vmchip .dot{background:var(--fg3)}
+.vmchip.on{background:rgba(22,163,74,.1);color:var(--ok-text)}
+.vmchip.on .dot{background:var(--ok)}
+.toolchip{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;padding:6px 12px;border-radius:999px;background:var(--muted);border:0;color:var(--fg2);font-size:13px;line-height:20px}
+@media (max-width:1199px){.runside{width:380px;flex-basis:380px}}
+@media (max-width:767px){
+ .sb{display:none}
+ .topbar{display:flex}
+ .app{flex-direction:column}
+ .hide-m{display:none!important}
+ .main.split{height:auto;min-height:calc(100vh - 56px);flex-direction:column}
+ .mtabs{display:block}
+ .runside{width:auto;flex:1 1 auto;margin:0;border-left:0}
+ .main[data-view="chat"] .runside{display:none}
+ .main[data-view="run"] .chatsec{display:none}
+ .chatpad{padding:20px 16px!important}
+}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
+</style>
+</head>
+<body>
+
+<div class="omx">
+<div class="app"><nav class="sb" aria-label="Main"><div style="padding: 0 8px 12px"><a href="#" class="row" style="gap: 10px; color: var(--fg); text-decoration: none" aria-label="Omnix home"><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C83F5"/><stop offset="1" stop-color="#4338CA"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><circle cx="16" cy="16" r="6.5" fill="none" stroke="#fff" stroke-width="3"/><ellipse cx="16" cy="16" rx="12" ry="4" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.5" transform="rotate(-25 16 16)"/></svg><span class="h2" style="font-size: 20px">Omnix</span></a></div><a class="btn bp" href="#" style="width: 100%; margin-bottom: 12px"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg>Create new agent</a><a class="nav" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></a><a class="nav" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="12" rx="3"/><path d="M12 8V4H8M9 13v2M15 13v2"/></svg><span>Agents</span></a><a class="nav" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 10 5-10 5L2 7zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg><span>Workspaces</span></a><a class="nav" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Search</span><span class="kbd">⌘K</span></a><div class="label">Your agents</div><a class="nav" href="#"><svg class="av" width="24" height="24" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="48" fill="#E5EEDC"/><g transform="translate(0 4)"><path d="M24 80c-5 0-7-4-6-10 2-15 5-40 30-42 25 2 28 27 30 42 1 6-1 10-6 10z" fill="#8BAF6E"/><circle cx="39" cy="50" r="7" fill="#fff"/><circle cx="57" cy="50" r="7" fill="#fff"/><circle cx="40" cy="51" r="3" fill="#1F2236"/><circle cx="58" cy="51" r="3" fill="#1F2236"/><path d="M42 64q6 5 12 0" stroke="#1F2236" stroke-width="2.5" fill="none" stroke-linecap="round"/></g></svg><span>savvyy</span></a><a class="nav" href="#"><svg class="av" width="24" height="24" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="48" fill="#F6E3DA"/><g transform="translate(0 4)"><ellipse cx="38" cy="26" rx="5" ry="11" fill="#C9775A"/><ellipse cx="58" cy="26" rx="5" ry="11" fill="#C9775A"/><path d="M28 82c-6 0-8-6-7-14 2-17 7-32 27-32s25 15 27 32c1 8-1 14-7 14z" fill="#D98C6A"/><circle cx="40" cy="54" r="7" fill="#fff"/><circle cx="56" cy="54" r="7" fill="#fff"/><circle cx="40" cy="55" r="3" fill="#1F2236"/><circle cx="56" cy="55" r="3" fill="#1F2236"/><path d="M42 66h12v3a6 4 0 0 1-12 0z" fill="#1F2236"/></g></svg><span>cody</span></a><a class="nav on" href="#" aria-current="page"><svg class="av" width="24" height="24" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="48" fill="#ECE4F6"/><g transform="translate(0 4)"><path d="M24 76c-7 0-9-11-2-15-4-11 6-19 13-13 2-11 17-13 21-4 9-6 19 3 15 11 8 3 8 15 0 17-3 6-40 6-47 4z" fill="#A88BC9"/><circle cx="40" cy="52" r="7" fill="#fff"/><circle cx="57" cy="50" r="7" fill="#fff"/><circle cx="41" cy="50" r="3" fill="#1F2236"/><circle cx="58" cy="48" r="3" fill="#1F2236"/><circle cx="48" cy="64" r="2.5" fill="#1F2236"/></g></svg><span>Research Assistant</span></a><div style="flex: 1 1 auto"></div><a class="nav" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg><span>Inbox</span><span class="count" aria-label="3 unread">3</span></a><a class="nav" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/></svg><span>Integrations</span></a><a class="nav" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l1.5-5h15L21 9M4 9v11h16V9M3 9h18M9 20v-6h6v6"/></svg><span>Marketplace</span></a><a href="#" class="row" style="gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--muted); margin: 8px 0; text-decoration: none; color: var(--fg)"><span style="color: var(--brand)"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg></span><span class="col"><span class="cap">12% of monthly tokens</span><span class="cap" style="color: var(--brand-text)">Upgrade for more</span></span></a><div class="divider"></div><button class="row" aria-haspopup="menu" style="gap: 12px; padding: 8px; border-radius: 12px; border: 0; background: none; color: var(--fg); text-align: left; cursor: pointer; margin-top: 4px"><span class="ava">S</span><span class="col grow"><span class="med">Shubham Sinha</span><span class="cap sub">Free plan</span></span><span style="color: var(--fg2)"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"/></svg></span></button></nav><header class="topbar"><button class="ibtn" aria-label="Open menu" style="width: 44px; height: 44px"><svg class="i i22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span class="grow"><a href="#" class="row" style="gap: 10px; color: var(--fg); text-decoration: none" aria-label="Omnix home"><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="url(#lg)"/><circle cx="16" cy="16" r="6.5" fill="none" stroke="#fff" stroke-width="3"/><ellipse cx="16" cy="16" rx="12" ry="4" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.5" transform="rotate(-25 16 16)"/></svg><span class="h2" style="font-size: 20px">Omnix</span></a></span><a class="ibtn" href="#" aria-label="Create new agent" style="width: 44px; height: 44px; background: var(--primary); color: var(--onp)"><svg class="i i20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></a></header>
+
+<div class="main split" id="main" data-view="chat">
+
+<!-- Chat (06-chat-messages), unchanged apart from the header -->
+<section class="chatsec grow" aria-label="Chat with Research Assistant">
+<header class="row" style="height: 64px; padding: 0 24px; border-bottom: 1px solid var(--border); gap: 12px; flex: none"><svg class="av" width="32" height="32" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="48" fill="#ECE4F6"/><g transform="translate(0 4)"><path d="M24 76c-7 0-9-11-2-15-4-11 6-19 13-13 2-11 17-13 21-4 9-6 19 3 15 11 8 3 8 15 0 17-3 6-40 6-47 4z" fill="#A88BC9"/><circle cx="40" cy="52" r="7" fill="#fff"/><circle cx="57" cy="50" r="7" fill="#fff"/><circle cx="41" cy="50" r="3" fill="#1F2236"/><circle cx="58" cy="48" r="3" fill="#1F2236"/><circle cx="48" cy="64" r="2.5" fill="#1F2236"/></g></svg>
+<div class="col grow"><h1 class="h3" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Research Assistant</h1></div>
+<span class="vmchip hide-m" id="vmchip"><span class="dot"></span><span id="vmchip-t">VM off</span></span>
+<button class="btn bs sm hide-m"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M12 7v5l4 2"/></svg>Chats</button>
+<button class="ibtn on hide-m" id="panel-toggle" aria-label="Hide run panel" aria-pressed="true" title="Run panel"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M14 4v16"/></svg></button>
+<button class="ibtn" aria-label="Agent configuration"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+</header>
+
+<div class="mtabs"><div class="seg" role="tablist" aria-label="View"><button role="tab" class="on" id="tab-chat" aria-selected="true">Chat</button><button role="tab" id="tab-run" aria-selected="false">Run · live</button></div></div>
+
+<div class="chatscroll">
+<div class="col chatpad" style="gap: 24px; padding: 24px 32px; max-width: 840px; width: 100%; margin: 0 auto">
+<div class="row" style="justify-content: flex-end"><p class="bubble">Find today’s 5 most important AI news stories and summarize each in two lines. Chart how many sources covered each one.</p></div>
+<div class="row" style="align-items: flex-start; gap: 12px"><svg class="av" width="32" height="32" viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="48" fill="#ECE4F6"/><g transform="translate(0 4)"><path d="M24 76c-7 0-9-11-2-15-4-11 6-19 13-13 2-11 17-13 21-4 9-6 19 3 15 11 8 3 8 15 0 17-3 6-40 6-47 4z" fill="#A88BC9"/><circle cx="40" cy="52" r="7" fill="#fff"/><circle cx="57" cy="50" r="7" fill="#fff"/><circle cx="41" cy="50" r="3" fill="#1F2236"/><circle cx="58" cy="48" r="3" fill="#1F2236"/><circle cx="48" cy="64" r="2.5" fill="#1F2236"/></g></svg><div class="col grow" style="gap: 12px">
+<span class="toolchip"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/></svg>Used <span class="mono" style="color: var(--fg)">web.search</span> and <span class="mono" style="color: var(--fg)">web.fetch ×6</span></span>
+<p>I found six sources and ranked the stories. I’m writing the summaries now. You can follow each step in the run panel on the right.</p>
+<p class="row s sub" style="gap: 8px"><span class="spin" style="border-color: rgba(99,102,241,.2); border-top-color: var(--brand)"></span>Working on step 4 of 6</p>
+</div></div>
+</div>
+</div>
+
+<div class="col" style="align-items: center; gap: 8px; padding: 12px 24px 20px; flex: none">
+<div class="row" style="gap: 12px; width: 100%; max-width: 780px; padding: 8px 8px 8px 16px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border2); box-shadow: var(--sh-sm)"><span class="grow ph">Message Research Assistant…</span><button class="send" aria-label="Send"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div>
+<p class="cap sub hide-m">Messages you send while it works steer the run</p>
+</div>
+</section>
+
+<!-- Run panel, docked -->
+<aside class="runside" id="runside" aria-label="Run">
+<section class="runpanel">
+<div class="runhead"><span class="semi">Run #129</span><span class="badge livebadge"><span class="dot" style="background: #7C83F5"></span>Live</span><span class="grow"></span><span class="mono" style="color: var(--run-mut)" id="elapsed">00:01:24</span><button class="rbtn" aria-label="Open full run page" title="Open full run page"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button></div>
+
+<div class="vm" id="vm" data-state="off">
+<div class="row" style="gap: 12px">
+<span class="vmicon"><svg class="i i20" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M6 8l3 2-3 2M11 12h4"/></svg></span>
+<div class="col grow"><span class="semi">Isolated VM</span><span class="vstat" id="vm-stat"><span class="dot"></span><span id="vm-stat-t">Off</span></span></div>
+<span class="mono" style="color: var(--run-mut)" id="vm-up" hidden>00:00:00</span>
+</div>
+<p class="note" id="vm-note">A private sandbox where this agent can run code, use a browser and keep files. Starts in about a second. Billed per second while running.</p>
+<div class="screen" id="vm-screen" data-s="off">
+<div class="scrbar"><span class="cap" style="color: var(--run-mut)">Live screen</span><span class="badge scrmode" id="scr-mode">View only</span><span class="grow"></span>
+<button class="dbtn" id="scr-ctl" style="height: 28px; padding: 0 10px; font-size: 12px" disabled><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 7 17 2.5-7.5L21 11z"/></svg><span id="scr-ctl-t">Take control</span></button>
+<button class="rbtn" id="scr-full" aria-label="Expand screen" title="Expand screen" disabled><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button></div>
+<div class="scr" role="img" aria-label="Live view of the VM's screen">
+<div class="scr-off"><svg class="i i22" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>The VM’s screen appears here while it runs</div>
+<div class="desk">
+<div class="win"><div class="wbar"><i></i><i></i><i></i><span class="url">https://news.example.com/ai/today</span></div>
+<div class="page"><div class="hd"></div><div class="ln" style="width: 92%"></div><div class="ln hl" style="width: 84%"></div><div class="ln" style="width: 88%"></div><div class="ln" style="width: 60%"></div><div class="hd" style="width: 50%; margin-top: 4px"></div><div class="ln" style="width: 90%"></div><div class="ln" style="width: 76%"></div></div></div>
+<div class="task"><span>Chromium · agent browsing</span><span id="scr-clock">21:42</span></div>
+<svg class="cursor" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v16l4.5-4.5L13 21l2.5-1-3.5-6.5H18z" fill="#FFFFFF" stroke="#14162A" stroke-width="1.5" stroke-linejoin="round"/></svg>
+</div>
+<div class="scr-msg" id="scr-msg" hidden></div>
+</div>
+</div>
+<div class="specs" id="vm-specs" hidden><div class="spec"><span class="cap">CPU</span><span class="mono" style="color: var(--run-fg)">2 vCPU</span></div><div class="spec"><span class="cap">Memory</span><span class="mono" style="color: var(--run-fg)">512 MB</span></div><div class="spec"><span class="cap">Disk</span><span class="mono" style="color: var(--run-fg)">1.2 / 10 GB</span></div></div>
+<div class="term" id="vm-term" hidden aria-live="polite"></div>
+<div class="row" style="gap: 8px" id="vm-actions"></div>
+</div>
+
+<div class="seclabel">Steps</div>
+<ol class="col" style="gap: 4px; list-style: none; margin: 0; padding: 0" aria-live="polite">
+<li class="step"><span class="ind done"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="grow">Searched the web for today’s AI news</span><span class="mono" style="color: var(--run-mut)">0:04</span></li>
+<li class="step"><span class="ind done"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="grow">Opened 6 sources</span><span class="mono" style="color: var(--run-mut)">0:31</span></li>
+<li class="step"><span class="ind done"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span class="grow">Ranked stories by relevance</span><span class="mono" style="color: var(--run-mut)">0:52</span></li>
+<li class="step cur"><span class="ind"><span class="spin"></span></span><span class="grow">Writing two-line summaries…</span><span class="mono" style="color: var(--run-mut)">1:24</span></li>
+<li class="step"><span class="ind pend"></span><span class="col grow"><span style="color: var(--run-mut)">Chart source counts</span><span class="cap" style="color: var(--rp-warn)" id="chart-hint">Needs the VM</span></span><span class="mono" style="color: var(--run-mut)">—</span></li>
+<li class="step"><span class="ind pend"></span><span class="grow" style="color: var(--run-mut)">Send brief to Inbox</span><span class="mono" style="color: var(--run-mut)">—</span></li>
+</ol>
+
+<div class="col" style="gap: 10px; margin-top: 8px; padding: 16px; border-radius: 16px; background: var(--run2)">
+<p class="semi">Today’s AI brief <span class="cap" style="color: var(--run-mut); font-weight: 400">· drafting, 2 of 5 written</span></p>
+<div class="col" style="gap: 8px"><div class="skel" style="width: 60%"></div><div class="skel" style="width: 90%"></div><div class="skel" style="width: 75%"></div></div>
+</div>
+
+<div style="flex: 1 1 auto"></div>
+<div class="row" style="gap: 8px; padding-top: 12px; border-top: 1px solid var(--rp-line); margin-top: 8px">
+<span class="cap grow" style="color: var(--run-mut)">Started from chat · 9:41 PM</span>
+<button class="dbtn"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>Pause</button>
+<button class="dbtn stop"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>Stop run</button>
+</div>
+</section>
+</aside>
+
+</div></div>
+</div>
+
+<script>
+(function(){
+  var omx=document.querySelector(".omx"),root=document.documentElement,mq=matchMedia("(prefers-color-scheme: dark)"),manual=null;
+  function theme(){var t=root.getAttribute("data-theme");var dk=manual!==null?manual:(t?t==="dark":(location.hash==="#dark"||mq.matches));omx.classList.toggle("dark",dk);document.body.style.background=dk?"#0C0D1C":"#F7F8FC";root.style.colorScheme=dk?"dark":"light"}
+  theme();mq.addEventListener("change",theme);new MutationObserver(theme).observe(root,{attributes:true,attributeFilter:["data-theme"]});
+  document.addEventListener("keydown",function(e){if(e.key==="d"&&!e.target.closest("input,textarea")){manual=!omx.classList.contains("dark");theme()}});
+
+  function fmt(s){var h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return [h,m,x].map(function(n){return String(n).padStart(2,"0")}).join(":")}
+  var elapsed=84,el=document.getElementById("elapsed");
+  setInterval(function(){elapsed++;el.textContent=fmt(elapsed)},1000);
+
+  // Run panel toggle (desktop) and Chat / Run tabs (phone)
+  var main=document.getElementById("main"),side=document.getElementById("runside"),tg=document.getElementById("panel-toggle");
+  tg.addEventListener("click",function(){var open=side.hidden;side.hidden=!open;tg.classList.toggle("on",open);tg.setAttribute("aria-pressed",String(open));tg.setAttribute("aria-label",open?"Hide run panel":"Show run panel")});
+  var tc=document.getElementById("tab-chat"),tr=document.getElementById("tab-run");
+  function view(v){main.dataset.view=v;tc.classList.toggle("on",v==="chat");tr.classList.toggle("on",v==="run");tc.setAttribute("aria-selected",String(v==="chat"));tr.setAttribute("aria-selected",String(v==="run"))}
+  tc.addEventListener("click",function(){view("chat")});tr.addEventListener("click",function(){view("run")});
+  // the run panel's tabs live in the chat column; give the panel its own on phones
+  var rtabs=document.querySelector(".mtabs").cloneNode(true);rtabs.querySelectorAll("[id]").forEach(function(n){n.id=n.id+"-2"});
+  side.parentNode.insertBefore(rtabs,side);
+  var tc2=rtabs.querySelector("#tab-chat-2"),tr2=rtabs.querySelector("#tab-run-2");
+  tc2.addEventListener("click",function(){view("chat")});
+  var mtabsRun=function(){rtabs.style.display=main.dataset.view==="run"&&matchMedia("(max-width:767px)").matches?"block":"none";tc2.classList.toggle("on",main.dataset.view==="chat");tr2.classList.toggle("on",main.dataset.view==="run")};
+  new MutationObserver(mtabsRun).observe(main,{attributes:true,attributeFilter:["data-view"]});addEventListener("resize",mtabsRun);mtabsRun();
+
+  // VM: off -> starting -> running <-> paused -> off
+  var vm=document.getElementById("vm"),stat=document.getElementById("vm-stat-t"),up=document.getElementById("vm-up"),note=document.getElementById("vm-note"),specs=document.getElementById("vm-specs"),term=document.getElementById("vm-term"),acts=document.getElementById("vm-actions"),chip=document.getElementById("vmchip"),chipT=document.getElementById("vmchip-t"),hint=document.getElementById("chart-hint");
+  var uptime=0,timer=null,boot=[];
+  var scr=document.getElementById("vm-screen"),scrMsg=document.getElementById("scr-msg"),scrCtl=document.getElementById("scr-ctl"),scrCtlT=document.getElementById("scr-ctl-t"),scrFull=document.getElementById("scr-full"),scrMode=document.getElementById("scr-mode");
+  function control(on){scr.classList.toggle("ctl",on);scrMode.textContent=on?"You’re in control · agent waits":"View only";scrCtlT.textContent=on?"Give back":"Take control"}
+  function full(on){scr.classList.toggle("full",on);scrFull.setAttribute("aria-label",on?"Close expanded screen":"Expand screen")}
+  scrCtl.addEventListener("click",function(){var on=!scr.classList.contains("ctl");control(on);line(on?"You took control. Agent paused its browser steps.":"Control handed back to the agent.")});
+  scrFull.addEventListener("click",function(){full(!scr.classList.contains("full"))});
+  document.addEventListener("keydown",function(e){if(e.key==="Escape")full(false)});
+  var I={play:'<svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z" fill="currentColor"/></svg>',pause:'<svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',stop:'<svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>'};
+  function line(html){var d=document.createElement("div");d.innerHTML=html;term.appendChild(d);term.scrollTop=term.scrollHeight}
+  function tick(on){clearInterval(timer);if(on)timer=setInterval(function(){uptime++;up.textContent=fmt(uptime)},1000)}
+  function set(state){
+    vm.dataset.state=state;boot.forEach(clearTimeout);boot=[];
+    up.hidden=state==="off"||state==="starting";specs.hidden=state!=="running"&&state!=="paused";term.hidden=state==="off";note.hidden=state!=="off"&&state!=="paused";
+    chip.classList.toggle("on",state==="running");
+    scr.dataset.s=state;var live=state==="running";scrCtl.disabled=!live;scrFull.disabled=state==="off"||state==="starting";
+    if(!live)control(false);if(state==="off")full(false);
+    scrMsg.hidden=state!=="starting"&&state!=="paused";
+    scrMsg.innerHTML=state==="starting"?'<span class="spin"></span>Connecting to screen…':state==="paused"?"Paused · last frame shown":"";
+    if(state==="off"){
+      stat.textContent="Off";chipT.textContent="VM off";uptime=0;up.textContent=fmt(0);tick(false);term.innerHTML="";
+      note.textContent="A private sandbox where this agent can run code, use a browser and keep files. Starts in about a second. Billed per second while running.";
+      acts.innerHTML='<button class="dbtn go grow" data-act="start">'+I.play+'Start VM</button>';
+      hint.textContent="Needs the VM";hint.style.color="var(--rp-warn)";
+    }else if(state==="starting"){
+      stat.textContent="Starting…";chipT.textContent="VM starting";term.innerHTML="";
+      acts.innerHTML='<button class="dbtn grow" disabled><span class="spin"></span>Starting VM</button>';
+      line('<span class="cmd">$ omnix vm start research-assistant</span>');
+      boot.push(setTimeout(function(){line("Creating sandbox from template omnix-base")},400));
+      boot.push(setTimeout(function(){line("Mounting workspace disk (1.2 GB)")},900));
+      boot.push(setTimeout(function(){line("<b>✓</b> Ready in 1.4 s");set("running")},1500));
+    }else if(state==="running"){
+      stat.textContent="Running";chipT.textContent="VM running";tick(true);
+      acts.innerHTML='<button class="dbtn grow" data-act="pause">'+I.pause+'Pause</button><button class="dbtn stop grow" data-act="stop">'+I.stop+'Stop VM</button>';
+      hint.textContent="VM ready · runs after the summaries";hint.style.color="var(--rp-ok)";
+    }else if(state==="paused"){
+      stat.textContent="Paused · disk kept";chipT.textContent="VM paused";tick(false);
+      note.textContent="Paused VMs keep their files and cost nothing. Resume picks up where it left off.";
+      line("Paused. Disk kept.");
+      acts.innerHTML='<button class="dbtn go grow" data-act="resume">'+I.play+'Resume</button><button class="dbtn stop grow" data-act="stop">'+I.stop+'Stop VM</button>';
+    }
+  }
+  acts.addEventListener("click",function(e){var b=e.target.closest("[data-act]");if(!b)return;var a=b.dataset.act;
+    if(a==="start")set("starting");else if(a==="pause")set("paused");else if(a==="resume"){line("Resumed.");set("running")}else if(a==="stop"){set("off")}});
+  set("off");
+})();
+</script>
+</body>
+</html>

@@ -14,6 +14,7 @@
  *   --themes light,dark  which themes
  *   --click <selector>   click this in the app before capturing (repeatable, in order)
  *   --wait <ms>          extra settle time after load (default 1200)
+ *   --after <ms>         extra time after the clicks, for slow actions like starting a VM (default 0)
  *   --viewport           capture the viewport only, not the full page
  *   --base <url>         app origin (default http://localhost:3000)
  *
@@ -41,6 +42,7 @@ type Options = {
   themes: ("light" | "dark")[];
   clicks: string[];
   wait: number;
+  after: number;
   fullPage: boolean;
   base: string;
 };
@@ -73,6 +75,7 @@ function parseArgs(argv: string[]): Options {
     themes: (flags.themes ?? "light,dark").split(",") as ("light" | "dark")[],
     clicks,
     wait: Number(flags.wait ?? 1200),
+    after: Number(flags.after ?? 0),
     fullPage,
     base: flags.base ?? "http://localhost:3000",
   };
@@ -188,6 +191,7 @@ async function main() {
           await app.locator(selector).first().click({ timeout: 10_000 });
           await app.waitForTimeout(500);
         }
+        if (options.after) await app.waitForTimeout(options.after);
         if (options.fullPage) await growToContent(app, width);
         const appShot = await app.screenshot({ fullPage: options.fullPage });
 

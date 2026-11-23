@@ -11,6 +11,7 @@ import { TOOLS, listToolSettings } from "@/lib/tools";
 import { listConnections } from "@/lib/integrations/connections";
 import { UUID_PATTERN, getOwnedAgent, listConversations } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
+import { getSandbox, hasSandboxKey } from "@/lib/sandbox";
 import { listTasks, toTaskView } from "@/lib/tasks";
 
 type Props = {
@@ -38,11 +39,13 @@ export default async function AgentPage({ params, searchParams }: Props) {
   if (!agent) notFound();
 
   // The chat list, plus what the configuration panel beside the chat needs.
-  const [chats, tools, connections, tasks] = await Promise.all([
+  const [chats, tools, connections, tasks, vm] = await Promise.all([
     listConversations(agent.id, user.id),
     listToolSettings(agent),
     listConnections(user.id),
     listTasks(agent.id, user.id),
+    // The agent's VM for the run panel, checked with E2B if it may have paused itself.
+    getSandbox(user.id, agent.id),
   ]);
 
   // The chat to show: the one asked for, or the most recent one.
@@ -112,6 +115,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
       }}
       initialPrompt={initialPrompt}
       initialTab={initialTab}
+      vm={{ ready: hasSandboxKey(), initial: vm }}
     />
   );
 }

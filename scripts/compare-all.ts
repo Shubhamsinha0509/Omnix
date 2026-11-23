@@ -56,6 +56,7 @@ async function main() {
     ["18-settings", "/workspace/settings"],
     ["19-success", `${chat}/created`],
     ["20-empty-agents", "/workspace/agents?preview=empty"],
+    ["21-chat-run-panel", `${chat}?new=1`, ["--viewport", "--widths", "1440"]],
   ];
 
   const only = process.argv.slice(2);

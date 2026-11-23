@@ -307,6 +307,22 @@
   --color-subtle-foreground: var(--subtle-foreground);
 }
 
+/* The run panel beside the chat (21-chat-run-panel) follows the theme: a light card in
+   light mode, the dark run panel in dark mode. Everything inside that uses the run-panel
+   colors (RunStepRow included) switches with it. The full run page (13) stays dark. */
+.run-panel-themed {
+  --run-panel: var(--card);
+  --run-panel-foreground: var(--foreground);
+  --run-panel-muted: var(--muted-foreground);
+  --run-panel-raised: var(--muted);
+}
+.dark .run-panel-themed {
+  --run-panel: #08091a;
+  --run-panel-foreground: var(--slate-50);
+  --run-panel-muted: var(--slate-400);
+  --run-panel-raised: var(--slate-800);
+}
+
 /* The focus ring is a box-shadow; unlayered, so shadow utilities on buttons and cards
    (which live in @layer utilities) can't hide it. */
 :focus-visible {

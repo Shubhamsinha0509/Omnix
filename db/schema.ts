@@ -438,6 +438,43 @@ export const mcpToolCache = pgTable("mcp_tool_cache", {
   error: text("error"),
 });
 
+/**
+ * Each agent's own VM, an E2B sandbox (D15, docs/06-virtual-machines.md). One row per
+ * agent, kept after a stop so the usage total survives; the VM itself is what comes and goes.
+ *
+ * `status` is our record and E2B is the truth: a VM left idle is paused by E2B on its own
+ * at `expiresAt`, and `lib/sandbox` notices that the next time anyone looks.
+ */
+export const sandboxes = pgTable(
+  "sandboxes",
+  {
+    agentId: uuid("agent_id")
+      .primaryKey()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // E2B's sandbox id. Null when there is no VM (never started, or stopped).
+    providerId: text("provider_id"),
+    // The in-between states are claims: they are what stops two clicks starting two VMs.
+    status: text("status", {
+      enum: ["stopped", "starting", "running", "pausing", "paused", "stopping", "error"],
+    })
+      .notNull()
+      .default("stopped"),
+    // Why the last start or stop failed, in words for the user.
+    error: text("error"),
+    // Set while running: when the current stretch began, and when E2B will pause it.
+    runningSince: timestamp("running_since", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    // Running time across every stretch, for usage limits and billing.
+    usedSeconds: integer("used_seconds").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("sandboxes_user_idx").on(table.userId)],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Agent = typeof agents.$inferSelect;
@@ -458,3 +495,4 @@ export type NewNotification = typeof notifications.$inferInsert;
 export type McpClient = typeof mcpClients.$inferSelect;
 export type McpFlow = typeof mcpFlows.$inferSelect;
 export type McpToolCache = typeof mcpToolCache.$inferSelect;
+export type SandboxRow = typeof sandboxes.$inferSelect;

@@ -20,6 +20,7 @@ the redesign started; "new" means the route doesn't exist yet.
 | 12-agents | new: `/workspace/agents` | — (agents only listed on Home/sidebar) | agents + task/run counts |
 | 20-empty-agents | `/workspace/agents` with no agents | — | — |
 | 13-live-run | `/workspace/agent/[id]/runs/[runId]` | `RunTimeline` | `runs` + `run_steps` (`getRunDetail`) |
+| 21-chat-run-panel | `/workspace/agent/[id]` (beside the chat) | `ChatRunPanel` in `AgentChat` | the chat stream's own events (live, this page only) |
 | 14-inbox | `/workspace/inbox` | `Inbox` | `notifications`, approvals in tasks |
 | 15-integrations | new: `/workspace/integrations` (old `/workspace/connections` redirects) | `Connections` | `connections`, Gmail OAuth start/callback |
 | 16-marketplace | new: `/workspace/marketplace` | — (sidebar link 404s) | none yet → mock data |
@@ -42,6 +43,7 @@ All 20 screens are built. What is real and what is mock (everything mock is in
 | Chat drawer → Schedule | "Once" (disabled: one-off runs need backend) |
 | Create agent | File analysis, Code execution, Multi-modal, Custom tools (coming soon) |
 | Live run | Pause, Stop, steering (disabled) |
+| Chat run panel | none: the VM card is real (`VmCard`, `lib/sandbox`, needs `E2B_API_KEY`); Stop on a run stops the reply. Not built yet: CPU / memory / disk figures, and the agent using the VM (Phase 6 tools) |
 | Inbox | none — `?preview=sample` shows `MOCK_INBOX_ITEMS` in development |
 | Integrations | Gmail, Notion, Jira and Slack are real (Slack needs a Slack app, D48); Drive, Calendar, GitHub and Discord are still `MOCK_INTEGRATIONS` |
 | Marketplace | all templates (`MOCK_TEMPLATES`); "Use template" → real Create agent |

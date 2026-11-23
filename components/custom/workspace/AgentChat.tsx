@@ -11,6 +11,7 @@ import {
   Copy,
   History,
   Loader2,
+  PanelRight,
   Paperclip,
   Settings,
   SquarePen,
@@ -36,6 +37,7 @@ import {
   type ApprovalRequest,
 } from "@/lib/agent/events";
 import type { ConversationSummary } from "@/lib/agents";
+import type { SandboxView } from "@/lib/sandbox";
 import { ModelChip, SuggestionChip } from "@/components/custom/design/Chips";
 import { HeroWash } from "@/components/custom/design/HeroWash";
 import { TOOL_ICONS } from "@/components/custom/design/ToolPermissionRow";
@@ -43,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { AgentAvatar } from "./AgentAvatar";
 import AgentConfigPanel, { type AgentConfig, type ConfigTab } from "./AgentConfigPanel";
 import { ApprovalCard } from "./ApprovalCard";
+import ChatRunPanel from "./ChatRunPanel";
 import { Markdown } from "./Markdown";
 
 /** Prompts offered in an empty chat (05-chat-empty). */
@@ -64,7 +67,18 @@ export type ChatMessage = {
    */
   approval?: ApprovalRequest;
   approvalState?: "pending" | "deciding" | ApprovalDecision;
+  /** Live replies only, for the run panel: when the turn started and ended (ms). */
+  startedAt?: number;
+  finishedAt?: number;
+  /** When each step first arrived: activity ids, plus `reply` and `approval`. */
+  times?: Record<string, number>;
 };
+
+/** Notes the first time a step shows up, so the run panel can say when it happened. */
+const stamp = (message: ChatMessage, key: string): Record<string, number> | undefined =>
+  message.startedAt === undefined || message.times?.[key] !== undefined
+    ? message.times
+    : { ...message.times, [key]: Date.now() };
 
 type Props = {
   agent: { id: string; name: string; avatarSeed: string; instructions: string };
@@ -80,6 +94,8 @@ type Props = {
   initialPrompt?: string | null;
   /** `?configure=instructions`: open the drawer on that tab. */
   initialTab?: ConfigTab | null;
+  /** The agent's VM, for the run panel. */
+  vm: { ready: boolean; initial: SandboxView };
 };
 
 /**
@@ -113,6 +129,7 @@ export default function AgentChat({
   config,
   initialPrompt = null,
   initialTab = null,
+  vm,
 }: Props) {
   const router = useRouter();
   /** The configuration drawer: closed to start (05/06), open on a tab (07–10). */
@@ -121,6 +138,21 @@ export default function AgentChat({
   const openPanel = (tab?: ConfigTab) => {
     if (tab) setPanelTab(tab);
     setPanelOpen(true);
+  };
+  /**
+   * The run panel (21-chat-run-panel). Two switches because it behaves differently by width:
+   * docked beside the chat from 1024px (shown unless hidden), over the chat below that
+   * (hidden unless opened).
+   */
+  const [runDocked, setRunDocked] = useState(true);
+  const [runSheet, setRunSheet] = useState(false);
+  const toggleRun = () => {
+    if (window.matchMedia("(min-width: 1024px)").matches) setRunDocked((open) => !open);
+    else setRunSheet((open) => !open);
+  };
+  const closeRun = () => {
+    setRunDocked(false);
+    setRunSheet(false);
   };
   /** Which replies have their tool steps expanded. */
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -224,11 +256,11 @@ export default function AgentChat({
 
       for (const event of parse(decoder.decode(value, { stream: true }))) {
         if (event.t === "text") {
-          patch(replyId, (m) => ({ ...m, content: m.content + event.v }));
+          patch(replyId, (m) => ({ ...m, content: m.content + event.v, times: stamp(m, "reply") }));
         } else if (event.t === "note") {
           patch(replyId, (m) => ({ ...m, notes: [...(m.notes ?? []), event.v] }));
         } else if (event.t === "approval") {
-          patch(replyId, (m) => ({ ...m, approval: event.v, approvalState: "pending" }));
+          patch(replyId, (m) => ({ ...m, approval: event.v, approvalState: "pending", times: stamp(m, "approval") }));
         } else {
           // Activities arrive twice: once running, once finished. Update in place.
           patch(replyId, (m) => {
@@ -241,7 +273,11 @@ export default function AgentChat({
               status: event.status,
               detail: event.detail,
             };
-            return { ...m, activity: at === -1 ? [...activity, next] : activity.with(at, next) };
+            return {
+              ...m,
+              activity: at === -1 ? [...activity, next] : activity.with(at, next),
+              times: stamp(m, event.id),
+            };
           });
         }
       }
@@ -270,7 +306,7 @@ export default function AgentChat({
     setChat((prev) => [
       ...prev,
       { id: crypto.randomUUID(), role: "user", content: text },
-      { id: replyId, role: "assistant", content: "", pending: true },
+      { id: replyId, role: "assistant", content: "", pending: true, startedAt: Date.now() },
     ]);
 
     const controller = new AbortController();
@@ -313,7 +349,7 @@ export default function AgentChat({
       }
     } finally {
       // The reply is finished either way, so it stops showing "Thinking...".
-      patch(replyId, (m) => ({ ...m, pending: false }));
+      patch(replyId, (m) => ({ ...m, pending: false, finishedAt: Date.now() }));
       if (owns()) {
         setIsStreaming(false);
         abortRef.current = null;
@@ -365,7 +401,10 @@ export default function AgentChat({
         ...m,
         approvalState: decision === "approve" ? "approved" : "rejected",
       }));
-      setChat((prev) => [...prev, { id: replyId, role: "assistant", content: "", pending: true }]);
+      setChat((prev) => [
+        ...prev,
+        { id: replyId, role: "assistant", content: "", pending: true, startedAt: Date.now() },
+      ]);
 
       await streamInto(res.body, replyId);
     } catch (err) {
@@ -374,7 +413,7 @@ export default function AgentChat({
       // Offer the buttons again rather than leaving the card stuck on "Working...".
       patch(card.id, (m) => (m.approvalState === "deciding" ? { ...m, approvalState: "pending" } : m));
     } finally {
-      patch(replyId, (m) => ({ ...m, pending: false }));
+      patch(replyId, (m) => ({ ...m, pending: false, finishedAt: Date.now() }));
       dropIfEmpty(replyId);
       if (owns()) {
         setIsStreaming(false);
@@ -421,6 +460,9 @@ export default function AgentChat({
 
   const empty = chat.length === 0;
   const gmailOn = config.tools.some((tool) => tool.provider === "gmail" && tool.enabled);
+  /** The run the panel follows: the newest reply started from this page. */
+  const currentRun = chat.findLast((message) => message.role === "assistant" && message.startedAt !== undefined) ?? null;
+  const runShown = runDocked || runSheet;
 
   return (
     <div className="relative flex h-[calc(100svh-3.5rem)] md:h-svh">
@@ -482,6 +524,21 @@ export default function AgentChat({
           >
             <SquarePen />
             <span className="hidden md:inline">New chat</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={runShown ? "Hide run panel" : "Show run panel"}
+            title="Run panel"
+            onClick={toggleRun}
+            className={cn(
+              // Lit only where the panel is actually showing at this width.
+              runSheet && "max-lg:bg-accent max-lg:text-brand",
+              runDocked && !panelOpen && "lg:bg-accent lg:text-brand",
+            )}
+          >
+            <PanelRight />
           </Button>
 
           <Button
@@ -668,6 +725,31 @@ export default function AgentChat({
           </p>
         </div>
       </section>
+
+      {/* Run panel (21): beside the chat from 1024px, over it below. The configuration
+          drawer takes its place while open, so the chat never gets squeezed by both. */}
+      {!panelOpen && runShown && (
+        <aside
+          aria-label="Run panel"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") closeRun();
+          }}
+          className={cn(
+            // Flush to the right edge, full height, one divider: the mirror of the sidebar.
+            "absolute inset-0 z-30 flex lg:static lg:w-[380px] lg:shrink-0 lg:border-l xl:w-[440px]",
+            !runSheet && "max-lg:hidden",
+            !runDocked && "lg:hidden",
+          )}
+        >
+          <ChatRunPanel
+            agentId={agent.id}
+            run={currentRun}
+            vm={vm}
+            onStop={() => abortRef.current?.abort()}
+            onClose={closeRun}
+          />
+        </aside>
+      )}
 
       {/* Configuration drawer (07–10): beside the chat on wide screens, over it below 1280px. */}
       {panelOpen && (
