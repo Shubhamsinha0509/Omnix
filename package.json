@@ -13,10 +13,12 @@
     "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
     "compare": "node --no-warnings scripts/compare.ts",
     "typecheck": "tsc --noEmit",
-    "compare:all": "node --no-warnings scripts/compare-all.ts"
+    "compare:all": "node --no-warnings scripts/compare-all.ts",
+    "verify:mcp": "node --no-warnings scripts/verify-mcp.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@modelcontextprotocol/client": "^2.4.0",
     "@shadcn/react": "^0.3.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

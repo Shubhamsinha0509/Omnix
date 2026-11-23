@@ -157,7 +157,7 @@ lib/
     connections.ts                 the only way tokens are read or written
     access.ts, google.ts, gmail.ts Gmail OAuth, refresh and the API client
   -- planned --
-  mcp/                             MCP client, server allow-list, per-user OAuth
+  mcp/                             MCP client, server allow-list, per-user OAuth (Phase 5, built)
   sandbox/                         E2B client
 db/
   schema.ts                        Drizzle schema (users, agents, conversations,

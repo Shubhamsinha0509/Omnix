@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Loader2, Search, Unplug } from "lucide-react";
+import { Loader2, RefreshCw, Search, Unplug } from "lucide-react";
 
 import {
   AlertDialog,
@@ -19,21 +19,39 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IntegrationTile } from "@/components/custom/design/IntegrationTile";
-import { disconnectAccount } from "@/app/workspace/integrations/actions";
+import { disconnectAccount, refreshServerTools } from "@/app/workspace/integrations/actions";
 import type { SafeConnection } from "@/lib/integrations/connections";
-import { MOCK_INTEGRATIONS } from "@/lib/mock-data";
+
+/** One app on this page, whether it is built in, an MCP server, or still a picture. */
+export type IntegrationView = {
+  key: string;
+  name: string;
+  description: string;
+  /** Letter mark and brand colour for the 44px tile. */
+  mark: string;
+  color: string;
+  /** The active account, when there is one. */
+  connection: SafeConnection | null;
+  /** An account that needs reconnecting — expired, or access revoked. */
+  broken: SafeConnection | null;
+  toolCount: number;
+  /** Where "Connect" goes, or null when it can't be connected here. */
+  connectHref: string | null;
+  /** Why it can't be connected, shown on the disabled button. */
+  disabledReason: string | null;
+  /** MCP servers: how fresh the tool list is, and why it is missing. */
+  toolsState?: { fetchedAt: string | null; error: string | null; stale: boolean } | null;
+  docsUrl?: string;
+  beta?: boolean;
+  /** True while the app is only a design (lib/mock-data.ts). */
+  mock?: boolean;
+};
 
 type Props = {
-  connections: SafeConnection[];
-  /** How many tools each provider gives agents (gmail: 4). */
-  toolCounts: Record<string, number>;
-  /** False when the Google client id and secret aren't configured yet. */
-  googleReady: boolean;
+  integrations: IntegrationView[];
   /** Set when the token-encryption key is missing: no token can be stored at all. */
   encryptionReady: boolean;
 };
-
-const GMAIL_CONNECT = "/api/connections/gmail/start?returnTo=/workspace/integrations";
 
 type Filter = "all" | "connected" | "available";
 
@@ -41,21 +59,19 @@ type Filter = "all" | "connected" | "available";
  * Integrations (15-integrations): the apps agents can use. Connecting one gives no agent
  * access by itself — each agent's tools are switched on one by one in its Tools tab.
  *
- * Gmail is real: Connect runs its OAuth flow, and switching the tile off disconnects the
- * account (after asking). The rest come from MOCK_INTEGRATIONS until they exist.
+ * Gmail and the MCP servers are real: Connect runs the account's OAuth flow and switching
+ * a tile off disconnects it (after asking). An MCP tile also offers "Refresh tools",
+ * because its tools belong to the server and can change without us.
  */
-export default function Connections({ connections, toolCounts, googleReady, encryptionReady }: Props) {
+export default function Connections({ integrations, encryptionReady }: Props) {
   const [confirming, setConfirming] = useState<SafeConnection | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [refreshing, setRefreshing] = useState<string | null>(null);
   const [isWorking, startWorking] = useTransition();
 
-  const gmail = connections.filter((connection) => connection.provider === "gmail");
-  const gmailActive = gmail.find((connection) => connection.status === "active") ?? null;
-  const gmailBroken = !gmailActive ? (gmail[0] ?? null) : null;
-  const canConnect = googleReady && encryptionReady;
-  const connectedCount = gmailActive ? 1 : 0;
+  const connectedCount = integrations.filter((integration) => integration.connection).length;
 
   const disconnect = (connection: SafeConnection) => {
     setError(null);
@@ -66,21 +82,23 @@ export default function Connections({ connections, toolCounts, googleReady, encr
     });
   };
 
-  const tiles = [
-    {
-      key: "gmail",
-      name: "Gmail",
-      description: "Search, read and draft email. Sending needs your OK.",
-      mark: "G",
-      color: "#EA4335",
-      connected: Boolean(gmailActive),
-    },
-    ...MOCK_INTEGRATIONS.map((integration) => ({ ...integration, connected: false })),
-  ].filter((tile) => {
-    if (filter === "connected" && !tile.connected) return false;
-    if (filter === "available" && tile.connected) return false;
+  const refresh = (integration: IntegrationView) => {
+    if (!integration.connection) return;
+    setError(null);
+    setRefreshing(integration.key);
+    startWorking(async () => {
+      const result = await refreshServerTools(integration.connection!.id);
+      setRefreshing(null);
+      if (result?.error) setError(`${integration.name}: ${result.error}`);
+    });
+  };
+
+  const visible = integrations.filter((integration) => {
+    const connected = Boolean(integration.connection);
+    if (filter === "connected" && !connected) return false;
+    if (filter === "available" && connected) return false;
     const needle = query.trim().toLowerCase();
-    return !needle || `${tile.name} ${tile.description}`.toLowerCase().includes(needle);
+    return !needle || `${integration.name} ${integration.description}`.toLowerCase().includes(needle);
   });
 
   return (
@@ -125,57 +143,94 @@ export default function Connections({ connections, toolCounts, googleReady, encr
       )}
 
       <div className="grid grid-cols-2 gap-5 lg:grid-cols-4 max-md:grid-cols-1">
-        {tiles.map((tile) =>
-          tile.key === "gmail" ? (
+        {visible.map((integration) => {
+          const active = integration.connection;
+          const isRefreshing = refreshing === integration.key;
+
+          return (
             <IntegrationTile
-              key="gmail"
-              integration={{ ...tile, enabled: Boolean(gmailActive), toolCount: toolCounts.gmail }}
-              onEnabledChange={(on) => {
-                if (!on && gmailActive) setConfirming(gmailActive);
+              key={integration.key}
+              integration={{
+                key: integration.key,
+                name: integration.name,
+                description: integration.description,
+                mark: integration.mark,
+                color: integration.color,
+                connected: Boolean(active),
+                enabled: Boolean(active),
+                toolCount: integration.toolCount,
               }}
+              onEnabledChange={active ? (on) => !on && setConfirming(active) : undefined}
               action={
-                canConnect ? (
-                  <Link href={GMAIL_CONNECT} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                    {gmailBroken ? "Reconnect" : "Connect"}
+                integration.connectHref ? (
+                  <Link
+                    href={integration.connectHref}
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                  >
+                    {integration.broken ? "Reconnect" : "Connect"}
                   </Link>
                 ) : (
-                  <Button variant="outline" size="sm" disabled title="Google OAuth isn't configured in .env">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled
+                    title={integration.disabledReason ?? undefined}
+                  >
                     Connect
                   </Button>
                 )
               }
               footer={
-                gmailActive ? (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="run" title={`Connected as ${gmailActive.accountLabel}`}>
-                      Connected
+                <div className="flex flex-wrap items-center gap-2">
+                  {active ? (
+                    <>
+                      <Badge variant="run" title={`Connected as ${active.accountLabel}`}>
+                        Connected
+                      </Badge>
+                      <span className="text-caption font-medium text-muted-foreground">
+                        {integration.toolCount} {integration.toolCount === 1 ? "tool" : "tools"}
+                      </span>
+                      {integration.toolsState && (
+                        <button
+                          type="button"
+                          onClick={() => refresh(integration)}
+                          disabled={isWorking}
+                          title={toolsTitle(integration)}
+                          className="inline-flex min-h-11 items-center gap-1 text-caption font-medium text-brand-text hover:underline disabled:opacity-60"
+                        >
+                          {isRefreshing ? (
+                            <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <RefreshCw className="size-3.5" aria-hidden="true" />
+                          )}
+                          {isRefreshing ? "Refreshing…" : "Refresh tools"}
+                        </button>
+                      )}
+                      {integration.toolsState?.error && (
+                        <Badge variant="warn" title={integration.toolsState.error}>
+                          Tools unavailable
+                        </Badge>
+                      )}
+                    </>
+                  ) : integration.broken ? (
+                    <Badge variant="warn">
+                      {integration.broken.status === "revoked" ? "Reconnect needed" : "Expired"}
                     </Badge>
-                    <span className="text-caption font-medium text-muted-foreground">
-                      {toolCounts.gmail} tools
-                    </span>
-                  </div>
-                ) : gmailBroken ? (
-                  <Badge variant="warn">
-                    {gmailBroken.status === "revoked" ? "Reconnect needed" : "Expired"}
-                  </Badge>
-                ) : undefined
+                  ) : (
+                    <>
+                      <span className="text-caption font-medium text-muted-foreground">
+                        {integration.mock ? "Coming soon" : "Not connected"}
+                      </span>
+                      {integration.beta && <Badge variant="warn">Beta</Badge>}
+                    </>
+                  )}
+                </div>
               }
             />
-          ) : (
-            <IntegrationTile
-              key={tile.key}
-              integration={tile}
-              action={
-                // TODO(backend): see MOCK_INTEGRATIONS in lib/mock-data.ts.
-                <Button variant="outline" size="sm" disabled title="Coming soon">
-                  Connect
-                </Button>
-              }
-            />
-          ),
-        )}
+          );
+        })}
       </div>
-      {tiles.length === 0 && <p className="text-center text-body-s text-muted-foreground">No apps match.</p>}
+      {visible.length === 0 && <p className="text-center text-body-s text-muted-foreground">No apps match.</p>}
 
       <p className="pt-2 text-center text-body-s text-muted-foreground">
         Missing an app?{" "}
@@ -211,4 +266,13 @@ export default function Connections({ connections, toolCounts, googleReady, encr
       </AlertDialog>
     </>
   );
+}
+
+/** When the tool list was last read, for the Refresh button's tooltip. */
+function toolsTitle(integration: IntegrationView) {
+  const state = integration.toolsState;
+  if (!state) return undefined;
+  if (state.error) return `Last refresh failed: ${state.error}`;
+  if (!state.fetchedAt) return "The tool list hasn't been read yet.";
+  return `Tool list read ${new Date(state.fetchedAt).toLocaleString()}${state.stale ? " (due a refresh)" : ""}`;
 }

@@ -128,9 +128,6 @@ export type MockIntegration = {
 
 export const MOCK_INTEGRATIONS: MockIntegration[] = [
   { key: "google-drive", name: "Google Drive", description: "Find and read files you choose to share.", mark: "D", color: "#0F9D58" },
-  { key: "slack", name: "Slack", description: "Read channels and post messages as you.", mark: "S", color: "#611F69" },
-  { key: "notion", name: "Notion", description: "Search pages and add notes to databases.", mark: "N", color: "#37352F" },
-  { key: "jira", name: "Jira", description: "Read issues and summarize sprint progress.", mark: "J", color: "#0052CC" },
   { key: "google-calendar", name: "Google Calendar", description: "See your events and suggest free time.", mark: "C", color: "#4285F4" },
   { key: "github", name: "GitHub", description: "Read repositories, issues and pull requests.", mark: "GH", color: "#24292F" },
   { key: "discord", name: "Discord", description: "Read and reply in servers you choose.", mark: "Di", color: "#5865F2" },

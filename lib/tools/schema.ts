@@ -103,3 +103,74 @@ function checkValue(
     }
   }
 }
+
+/**
+ * The largest argument object we will send on: 64 KB of JSON.
+ *
+ * A model that has just read somebody's mailbox can write arguments as big as it likes,
+ * and a tool call is the way that content leaves Omnix. Approval is the real defence
+ * (D10), but a cap costs nothing and keeps a runaway call from being a large upload to
+ * someone else's server.
+ */
+const MAX_ARGS_BYTES = 64 * 1024;
+
+/**
+ * Checks arguments against a schema we didn't write — an MCP server's.
+ *
+ * Deliberately loose. The server owns the contract and validates against it properly,
+ * answering a bad call with an error the model can read, so the only things worth
+ * checking here are the ones a remote round trip shouldn't be spent on: that it is an
+ * object at all, that the required fields are present, and that it isn't enormous.
+ *
+ * Unlike `validateArgs`, **nothing is dropped**. Whatever the model wrote is what the
+ * server is asked to do, which is also what makes an approval card honest.
+ */
+export function validateOpenArgs(
+  schema: Record<string, unknown>,
+  args: unknown,
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  if (args === null || typeof args !== "object" || Array.isArray(args)) {
+    return { ok: false, error: "Arguments must be a JSON object." };
+  }
+
+  const input = args as Record<string, unknown>;
+
+  const required = Array.isArray(schema.required) ? schema.required : [];
+  for (const name of required) {
+    if (typeof name !== "string") continue;
+    if (input[name] === undefined || input[name] === null) {
+      return { ok: false, error: `Missing required argument "${name}".` };
+    }
+  }
+
+  let size: number;
+  try {
+    size = Buffer.byteLength(JSON.stringify(input) ?? "", "utf8");
+  } catch {
+    // Circular, or something else that can't be sent as JSON at all.
+    return { ok: false, error: "Arguments couldn't be encoded as JSON." };
+  }
+  if (size > MAX_ARGS_BYTES) {
+    return {
+      ok: false,
+      error: `Those arguments are too large (${Math.round(size / 1024)} KB; the limit is ${MAX_ARGS_BYTES / 1024} KB). Send less.`,
+    };
+  }
+
+  return { ok: true, value: input };
+}
+
+/**
+ * Checks a tool call's arguments the right way for that tool: strictly against our own
+ * schema, or loosely against a schema its server published (`openParameters`).
+ *
+ * One function so the runner doesn't have to know which kind of tool it is holding.
+ */
+export function checkToolArgs(
+  tool: { parameters: JsonSchema; openParameters?: Record<string, unknown> },
+  args: unknown,
+) {
+  return tool.openParameters
+    ? validateOpenArgs(tool.openParameters, args)
+    : validateArgs(tool.parameters, args);
+}

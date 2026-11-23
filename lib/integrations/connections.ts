@@ -189,6 +189,42 @@ export async function updateAccessToken(
 }
 
 /**
+ * Writes a whole new token set back — what an MCP refresh produces.
+ *
+ * Separate from `updateAccessToken` because these providers rotate the refresh token as
+ * well (OAuth 2.1 expects them to), and the granted scope can come back narrower than
+ * last time. A refresh token is only overwritten when a new one is supplied, for the same
+ * reason as in `saveConnection`: a provider that sends none has not withdrawn the old one.
+ */
+export async function updateTokens(
+  userId: number,
+  connectionId: string,
+  tokens: {
+    accessToken: string;
+    refreshToken?: string | null;
+    expiresAt?: Date | null;
+    scopes?: string[];
+  },
+) {
+  const row = await findOwned(userId, connectionId);
+  if (!row) return false;
+
+  const aad = tokenAad(row.userId, row.provider);
+  await db
+    .update(connections)
+    .set({
+      accessTokenEnc: encrypt(tokens.accessToken, aad),
+      ...(tokens.refreshToken ? { refreshTokenEnc: encrypt(tokens.refreshToken, aad) } : {}),
+      ...(tokens.expiresAt !== undefined ? { expiresAt: tokens.expiresAt } : {}),
+      ...(tokens.scopes ? { scopes: tokens.scopes } : {}),
+      status: "active",
+      updatedAt: new Date(),
+    })
+    .where(eq(connections.id, row.id));
+  return true;
+}
+
+/**
  * Marks a connection as expired or revoked — used when a provider rejects our token,
  * so the user is told to reconnect instead of every run failing mysteriously.
  */

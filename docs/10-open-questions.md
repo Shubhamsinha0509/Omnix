@@ -2,7 +2,7 @@
 
 Decide these before the phase listed. When decided, record the answer in [decisions](09-decisions.md) and remove it from here.
 
-Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16), GitHub + Google sign-in (D18), approvals off-switch limited to `write` tools (D29), default model (D34), how a chat approval pauses and resumes (D35), how tasks are scheduled (D40), how a background run stays durable and waits for approval (D41), in-app delivery (D42), how long run logs are kept (D43), the email provider (D44) and the caps on unattended work (D45). MCP-first integrations is proposed (D17).
+Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16), GitHub + Google sign-in (D18), approvals off-switch limited to `write` tools (D29), default model (D34), how a chat approval pauses and resumes (D35), how tasks are scheduled (D40), how a background run stays durable and waits for approval (D41), in-app delivery (D42), how long run logs are kept (D43), the email provider (D44) and the caps on unattended work (D45). MCP-first integrations is confirmed (D17 → D46), with the official SDK as the client (D47), a per-server registration mode (D48) and an allow-list only (D49).
 
 ## Product
 
@@ -15,10 +15,11 @@ Already decided: individuals only (D14), E2B for VMs (D15), Vercel hosting (D16)
 
 | Question | Why it matters | Decide before |
 |---|---|---|
-| Confirm MCP-first (D17) after checking that Slack, Notion and Jira have usable official remote MCP servers with OAuth | If a key app has no good server, we need the fallback for it | Phase 5 |
-| Fallback for apps without a good MCP server: build ourselves, or an integration platform? | Only matters for apps MCP doesn't cover | Phase 5 |
+| ~~Confirm MCP-first (D17)~~ | — | **Answered** by the Phase 5 spike: all three have official remote servers with OAuth (D46) |
+| Fallback for apps without a good MCP server: build ourselves, or an integration platform? | Only matters for apps MCP doesn't cover | **Still open, not yet needed** — none of Slack, Notion or Jira needs it. Decide when an app users want turns out to have no usable server |
 | Which apps after Gmail, Slack, Notion, Jira? | Roadmap focus | Phase 5 |
-| Can users add their own MCP server URLs, or only our allow-list? | Flexibility vs tool-poisoning risk | Phase 5 |
+| ~~Can users add their own MCP server URLs, or only our allow-list?~~ | — | **Answered**: allow-list only (D49); user-supplied URLs stay in "Later" |
+| Does Slack get a Marketplace-published Omnix app, or does each workspace use its own internal app? | Slack's MCP server refuses dynamic registration and bans unlisted apps (D48), so without one of these two, Slack cannot be connected at all — unlike Notion and Jira, which need no configuration | Before Slack ships |
 
 ## Infrastructure
 

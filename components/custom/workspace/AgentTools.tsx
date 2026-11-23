@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { MessageSquare, ShieldCheck } from "lucide-react";
+import { Search, ShieldCheck } from "lucide-react";
 
-import { buttonVariants } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { ToolPermissionRow } from "@/components/custom/design/ToolPermissionRow";
@@ -12,14 +11,14 @@ import { updateAgentTool } from "@/app/workspace/actions";
 import type { SafeConnection } from "@/lib/integrations/connections";
 import type { ToolSetting } from "@/lib/tools";
 
-/** Tools are grouped by where they come from, which is how people think about them. */
-const GROUPS: { provider: string | null; title: string; note?: string }[] = [
-  { provider: null, title: "Built in", note: "No account needed" },
-  { provider: "gmail", title: "Gmail" },
-];
-
-/** Apps with no tools yet, shown as a connect row (the Slack row in 08). */
-const COMING = [{ key: "slack", title: "Slack" }];
+/**
+ * Past this many tools in one group, the group gets a search box.
+ *
+ * Built-in tools are a handful. An MCP server's are not: Notion publishes about sixty,
+ * Atlassian more, and a list that long is not something anyone scrolls looking for one
+ * switch (lib/mcp/tools.ts).
+ */
+const SEARCHABLE_FROM = 12;
 
 type Props = {
   agentId: string;
@@ -39,7 +38,28 @@ type Props = {
 export default function AgentTools({ agentId, agentName, tools, connections }: Props) {
   const [state, setState] = useState(tools);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [, startSaving] = useTransition();
+
+  /**
+   * One group per place tools come from, in the order the tools arrive — built-in first,
+   * then each connected account. Built from the tools themselves rather than a fixed
+   * list, because which MCP servers a user has connected is not something this component
+   * can know in advance.
+   */
+  const groups = useMemo(() => {
+    const seen = new Map<string, { provider: string | null; title: string; note?: string }>();
+    for (const tool of state) {
+      const id = tool.provider ?? "";
+      if (seen.has(id)) continue;
+      seen.set(id, {
+        provider: tool.provider,
+        title: tool.providerName ?? "Built in",
+        note: tool.provider ? undefined : "No account needed",
+      });
+    }
+    return [...seen.values()];
+  }, [state]);
 
   const save = (key: string, change: Partial<ToolSetting>) => {
     const before = state;
@@ -79,9 +99,17 @@ export default function AgentTools({ agentId, agentName, tools, connections }: P
         </p>
       )}
 
-      {GROUPS.map((group) => {
+      {groups.map((group) => {
         const groupTools = state.filter((tool) => tool.provider === group.provider);
         if (groupTools.length === 0) return null;
+
+        const groupId = group.provider ?? "builtin";
+        const needle = (filters[groupId] ?? "").trim().toLowerCase();
+        const shown = needle
+          ? groupTools.filter((tool) =>
+              `${tool.label} ${tool.key} ${tool.summary}`.toLowerCase().includes(needle),
+            )
+          : groupTools;
 
         const accounts = connections.filter(
           (connection) => connection.provider === group.provider && connection.status === "active",
@@ -111,8 +139,24 @@ export default function AgentTools({ agentId, agentName, tools, connections }: P
                 ))}
             </div>
 
+            {groupTools.length > SEARCHABLE_FROM && (
+              <label className="flex h-10 items-center gap-2 rounded-md border border-input bg-card px-3 focus-within:border-ring">
+                <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <input
+                  type="search"
+                  value={filters[groupId] ?? ""}
+                  onChange={(event) =>
+                    setFilters((current) => ({ ...current, [groupId]: event.target.value }))
+                  }
+                  placeholder={`Search ${groupTools.length} ${group.title} tools`}
+                  aria-label={`Search ${group.title} tools`}
+                  className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground focus-visible:shadow-none!"
+                />
+              </label>
+            )}
+
             <div className="divide-y rounded-lg border bg-card">
-              {groupTools.map((tool) => (
+              {shown.map((tool) => (
                 <ToolPermissionRow
                   key={tool.key}
                   id={tool.key}
@@ -167,23 +211,22 @@ export default function AgentTools({ agentId, agentName, tools, connections }: P
                   )}
                 </ToolPermissionRow>
               ))}
+              {shown.length === 0 && (
+                <p className="px-4 py-3 text-body-s text-muted-foreground">
+                  No {group.title} tool matches.
+                </p>
+              )}
             </div>
           </section>
         );
       })}
 
-      {COMING.map((app) => (
-        <div key={app.key} className="flex items-center gap-3 rounded-lg bg-muted px-4 py-3">
-          <MessageSquare className="size-[18px] shrink-0 text-muted-foreground" />
-          <span className="flex flex-1 flex-col">
-            <span className="font-semibold">{app.title}</span>
-            <span className="text-caption font-medium text-muted-foreground">Not connected</span>
-          </span>
-          <Link href="/workspace/integrations" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Connect
-          </Link>
-        </div>
-      ))}
+      <p className="text-caption text-muted-foreground">
+        Tools from a connected app are that app&apos;s own, and start switched off.{" "}
+        <Link href="/workspace/integrations" className="text-brand-text hover:underline">
+          Connect another app
+        </Link>
+      </p>
     </div>
   );
 }

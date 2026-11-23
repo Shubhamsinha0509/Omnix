@@ -127,14 +127,56 @@ pressing than it was in Phase 3, not less.
 
 **Done when:** agents can use Slack, Notion and Jira.
 
-- [ ] Spike: confirm Slack, Notion and Jira have usable official remote MCP servers with OAuth → confirm D17, decide fallback for any gaps
-- [ ] MCP client in the agent runner (remote HTTP servers), tool list caching
-- [ ] MCP server allow-list (`lib/mcp/servers.ts`) and per-user MCP OAuth connections
-- [ ] Approval-by-default for MCP tools; reviewed read-only list per server
-- [ ] Slack via MCP (also as a delivery channel for task results)
-- [ ] Notion via MCP
-- [ ] Jira via MCP
-- [ ] Event triggers (new email via Gmail push, Slack events)
+Notion and Jira are built and connectable; Slack is built but cannot be connected until
+there is a Slack app (D48), and event triggers are not started.
+
+- [x] Spike: confirm Slack, Notion and Jira have usable official remote MCP servers with OAuth → D17 confirmed as D46; findings in [integrations](05-integrations.md#the-phase-5-spike-22-november-2026). No fallback needed for these three; Slack is the awkward one — it refuses dynamic client registration and allows only Marketplace-published or workspace-internal apps (D48)
+- [x] MCP client in the agent runner (remote HTTP servers), tool list caching — `lib/mcp/client.ts` over the official v2 SDK (D47), with the protocol era negotiated per connection; the list is cached in `mcp_tool_cache` and refreshed hourly by `lib/inngest/mcp.ts`, on connect, and by **Refresh tools** on the tile
+- [x] MCP server allow-list (`lib/mcp/servers.ts`) and per-user MCP OAuth connections — Notion and Jira register Omnix dynamically and need no configuration; Slack needs an app (D48). Tokens live in `connections` (`kind: "mcp"`), encrypted like Gmail's (D13); the connect flow is `app/api/connections/mcp/`
+- [x] Approval-by-default for MCP tools; reviewed read-only list per server — a tool is `write` unless its name is in that server's `readOnlyTools`, and the server's own `readOnlyHint` is deliberately not consulted
+- [x] Notion via MCP — all 20 tiles, agent tool settings grouped by server, and `/workspace/integrations` connect and disconnect (with revocation where the server publishes an endpoint)
+- [x] Jira via MCP — same flow; its server is still on a 2025-era protocol revision, which the era negotiation handles rather than a special case
+- [ ] Walk a connected account end to end: sign in at the consent screen → `tools/list` → a read tool in chat → a write tool with an approval
+- [ ] Slack via MCP (also as a delivery channel for task results) — **blocked**: Slack's MCP server has no dynamic client registration and allows only a Marketplace-published or workspace-internal app, with admin approval (D48). The allow-list entry, scopes and connect flow are built and the tile says why it is disabled; its `readOnlyTools` list is deliberately empty until a real `tools/list` can be seen, so every Slack tool would ask
+- [ ] Event triggers (new email via Gmail push, Slack events) — not started. Both legs need infrastructure that doesn't exist yet: a Google Cloud Pub/Sub topic and a verified webhook for Gmail, and a Slack app for Slack events. `tasks.trigger` would also gain `event`, plus an `event` jsonb column ([data model](03-data-model.md#tasks--event-triggers))
+
+### What is verified, and what isn't
+
+**Checked against the real servers, 22 Nov 2026** — 98 checks, no user account needed.
+Re-run them with `npm run verify:mcp -- --live` (`scripts/verify-mcp.ts`):
+
+- **Discovery, registration and consent URLs are real.** Against `mcp.notion.com` and
+  `mcp.atlassian.com`, the client walked RFC 9728 protected-resource metadata, registered
+  Omnix dynamically (both issued a `client_id` and secret, now stored encrypted in
+  `mcp_clients`), and produced an authorization URL carrying a PKCE `S256` challenge, our
+  own redirect URI, the RFC 8707 `resource` parameter naming the server, and **our** seven
+  Jira scopes rather than the forty the server lists. The issuer each flow resolved was
+  recorded for the RFC 9207 check on the way back.
+- **The connect flow is single-use and per-user.** A flow is claimed by `state` *and* user
+  id, and the claim deletes it: another user's id finds nothing, a second claim finds
+  nothing, and an expired row is refused.
+- **Credentials are encrypted and bound.** A registration secret is unreadable in the row,
+  carries the `v1:` prefix, and will not decrypt under another issuer's AAD.
+- **The tool mapping is safe by default.** From a cached list: a reviewed read is
+  `risk: "read"`, everything else — including a delete tool — is `write` and asks;
+  `executeWrite` and `executeDestructive` are not in Jira's read list; a tool name that
+  can't be put on the wire is dropped rather than mangled; every MCP tool is marked
+  untrusted; descriptions are attributed to their server; and an approval card shows the
+  tool, the server and the real arguments.
+- **Arguments are not mangled.** The loose checker keeps undeclared and deeply nested
+  properties intact (the strict one drops them, which is why MCP tools don't use it) and
+  refuses a non-object, a missing required field, or 70 KB of arguments.
+- **A connected server grants nothing by itself.** Its tools appear in the agent's settings
+  switched off, and a run offers none of them until one is turned on.
+
+**Not yet done against a live account.** Nobody has signed in at a consent screen, so the
+code exchange, `tools/list`, `tools/call`, the token refresh and the approval path for an
+MCP tool are code that type-checks and is unit-checked, not code that is known to work —
+the same position Phase 3 is in with Gmail. The two should be walked together.
+
+Also unproven: Slack anything (see above), and the `legacy` protocol era in practice —
+Atlassian's CORS headers say it still uses sessions, and `mode: "auto"` is written to fall
+back, but the fallback has only been exercised as far as the auth wall.
 
 ## Phase 6 — Dedicated VMs
 

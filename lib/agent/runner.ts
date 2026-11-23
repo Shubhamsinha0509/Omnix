@@ -6,10 +6,10 @@ import { CHAT_MODEL, buildSystemPrompt, getModelClient } from "@/lib/ai";
 import { ConnectionError, openConnection } from "@/lib/integrations/access";
 import {
   buildModelTools,
+  checkToolArgs,
   isNativeTool,
   resolveAgentTools,
   toWireName,
-  validateArgs,
   type AnyTool,
   type ApprovalSummary,
   type ModelTool,
@@ -786,7 +786,7 @@ async function executeCall(args: ExecuteCallArgs): Promise<CallOutcome> {
     return answer(call.id, { error: "Your arguments weren't valid JSON. Try the call again." });
   }
 
-  const checked = validateArgs(tool.parameters, parsed);
+  const checked = checkToolArgs(tool, parsed);
   if (!checked.ok) {
     await log("tool_call", tool.key, { args: parsed, error: checked.error });
     fail(checked.error);
@@ -954,7 +954,7 @@ async function runApprovedCall(args: {
   const tool = args.entry.tool as ToolDefinition;
   const activityId = crypto.randomUUID();
 
-  const checked = validateArgs(tool.parameters, args.payload);
+  const checked = checkToolArgs(tool, args.payload);
   if (!checked.ok) {
     const error = `The approved action no longer fits ${tool.key}: ${checked.error}`;
     await args.log("tool_result", tool.key, { error, approved: true });

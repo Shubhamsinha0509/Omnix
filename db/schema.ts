@@ -354,6 +354,90 @@ export const notifications = pgTable(
   ],
 );
 
+/**
+ * One OAuth client registration per authorization server (decision D48).
+ *
+ * A registration identifies **Omnix**, not a user: Notion and Atlassian both hand us a
+ * `client_id` the first time anyone connects them, and every user after that signs in
+ * against the same one. So this is keyed by the authorization server's `issuer` — the key
+ * the OAuth spec says a client id is unique to — and shared, while the tokens it goes on
+ * to mint stay per user in `connections`.
+ *
+ * A secret is encrypted like any other credential (D13), bound to the issuer as AAD.
+ * Servers that won't register dynamically (Slack) have no row here at all: their client
+ * comes from the environment.
+ */
+export const mcpClients = pgTable("mcp_clients", {
+  // The authorization server's own identifier, from its validated metadata document.
+  issuer: text("issuer").primaryKey(),
+  // Which allow-list entry caused this registration, for the UI and for cleanup.
+  serverId: text("server_id").notNull(),
+  clientId: text("client_id").notNull(),
+  // Absent for a public client, which is what a server issuing none gives us.
+  clientSecretEnc: text("client_secret_enc"),
+  // The rest of what the server returned — grant types, the redirect URIs it accepted,
+  // expiry — kept so the SDK gets back exactly what it stored, minus the secret.
+  info: jsonb("info").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * A connect flow that is part-way through the browser round trip.
+ *
+ * The PKCE verifier and what discovery resolved have to survive the user being away at
+ * someone else's consent screen, and our functions keep nothing in memory between
+ * requests (D16) — so the flow is a row, found again by the `state` the authorization
+ * server sends back. It is deleted the moment it is used: a verifier is single-use, and
+ * what makes PKCE worth anything is that nobody gets to use it twice.
+ *
+ * `expiresAt` is what stops this growing without bound when a user abandons a consent
+ * screen, which is the common case rather than the rare one.
+ */
+export const mcpFlows = pgTable(
+  "mcp_oauth_flows",
+  {
+    // The OAuth `state` parameter: random, and the only thing the callback can be found by.
+    state: text("state").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // The allow-list entry being connected, e.g. "notion".
+    serverId: text("server_id").notNull(),
+    codeVerifierEnc: text("code_verifier_enc").notNull(),
+    // What the SDK resolved before the redirect — the issuer above all, so the code is
+    // exchanged at the same authorization server the flow started with (RFC 9207).
+    discovery: jsonb("discovery").notNull().default({}),
+    // Where to send the user when the flow finishes.
+    returnTo: text("return_to").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("mcp_oauth_flows_expires_idx").on(table.expiresAt)],
+);
+
+/**
+ * The tool list one MCP server last reported, per connected account.
+ *
+ * An MCP server's tools are not ours to know: they are whatever `tools/list` says today,
+ * which can change under us. Asking on every run would put a network round trip in front
+ * of every message, and the agent's settings page needs the same list to draw a switch per
+ * tool — so it is cached here and refreshed on a timer (see `lib/mcp/tools.ts`).
+ *
+ * `error` is the other half of the point: when a server can't be reached, the page says so
+ * and the last known list keeps working, rather than the agent's tools silently vanishing.
+ */
+export const mcpToolCache = pgTable("mcp_tool_cache", {
+  connectionId: uuid("connection_id")
+    .primaryKey()
+    .references(() => connections.id, { onDelete: "cascade" }),
+  // The server's own tool definitions, as `tools/list` returned them.
+  tools: jsonb("tools").notNull().default([]),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).defaultNow().notNull(),
+  // Why the last refresh failed, or null when it worked.
+  error: text("error"),
+});
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Agent = typeof agents.$inferSelect;
@@ -371,3 +455,6 @@ export type Task = typeof tasks.$inferSelect;
 export type NewTask = typeof tasks.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+export type McpClient = typeof mcpClients.$inferSelect;
+export type McpFlow = typeof mcpFlows.$inferSelect;
+export type McpToolCache = typeof mcpToolCache.$inferSelect;

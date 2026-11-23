@@ -43,7 +43,7 @@ All 20 screens are built. What is real and what is mock (everything mock is in
 | Create agent | File analysis, Code execution, Multi-modal, Custom tools (coming soon) |
 | Live run | Pause, Stop, steering (disabled) |
 | Inbox | none — `?preview=sample` shows `MOCK_INBOX_ITEMS` in development |
-| Integrations | every app except Gmail (`MOCK_INTEGRATIONS`) |
+| Integrations | Gmail, Notion, Jira and Slack are real (Slack needs a Slack app, D48); Drive, Calendar, GitHub and Discord are still `MOCK_INTEGRATIONS` |
 | Marketplace | all templates (`MOCK_TEMPLATES`); "Use template" → real Create agent |
 | Usage & billing | plan, limits, plans, invoices (`MOCK_PLAN`, `MOCK_PLANS`, `MOCK_INVOICES`) |
 | Settings | photo, timezone, API keys, notifications (`MOCK_API_KEYS`, `MOCK_NOTIFICATION_PREFS`) |

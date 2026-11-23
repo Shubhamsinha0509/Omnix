@@ -38,7 +38,9 @@ Our tool registry hides where a tool comes from (built-in or MCP), so we can swa
 | **Show the source** — every tool in the UI shows which server it comes from | Users understand what the agent can touch |
 | **Cache tool lists, refresh periodically**; never let the model see raw credentials | Performance and safety |
 
-Step one of Phase 5: confirm Slack, Notion and Jira have usable official remote MCP servers with OAuth, and record the result.
+Step one of Phase 5 was to confirm Slack, Notion and Jira have usable official remote MCP
+servers with OAuth. They do — [the spike](#the-phase-5-spike-22-november-2026) records what
+each one actually answered, and the one constraint that changes the plan.
 
 ## Priority order — **Proposed**
 
@@ -75,20 +77,72 @@ Step one of Phase 5: confirm Slack, Notion and Jira have usable official remote 
 - "New email" events: Gmail push notifications via Google Cloud Pub/Sub → our webhook → Inngest event.
 - Note: this is a **separate** OAuth flow from "Sign in with Google". Signing in proves who the user is; connecting Gmail grants the agent access to their mailbox.
 
-### Slack
+## The Phase 5 spike (22 November 2026)
 
-- Slack app with OAuth (bot token + optionally user token). Public distribution requires Slack App Directory review if listed.
-- Events API for triggers ("message in channel").
+All three apps ship an official remote MCP server over Streamable HTTP, and all three are
+proper OAuth 2.1 resource servers: an unauthenticated `tools/list` comes back `401` with a
+`WWW-Authenticate: Bearer resource_metadata="…"` challenge, and the metadata it points at
+names the authorization server. So D17 holds — see [D46](09-decisions.md). What the probes
+returned, verbatim enough to build against:
+
+| | Slack | Notion | Atlassian (Jira) |
+|---|---|---|---|
+| MCP endpoint | `https://mcp.slack.com/mcp` | `https://mcp.notion.com/mcp` | `https://mcp.atlassian.com/v2/mcp` |
+| Protected resource metadata | `/.well-known/oauth-protected-resource` | same, and path-scoped per resource | path-scoped: `/.well-known/oauth-protected-resource/v2/mcp` |
+| Authorization server | itself (`mcp.slack.com`) | itself (`mcp.notion.com`) | `auth.atlassian.com/VCeDsk8…` |
+| Dynamic client registration | **no** | yes (`/register`) | yes (`/dcr/register`) |
+| Client ID Metadata Documents | no | yes | yes |
+| PKCE | S256 | S256 | S256 |
+| Refresh tokens | `refresh_token` grant | `refresh_token` grant | `refresh_token` grant + `offline_access` scope |
+| `iss` in the callback (RFC 9207) | not advertised | advertised | not advertised |
+| Scopes | 30, granular (`channels:history`, `chat:write`, `search:read.public`…) | one: `default` | ~40, granular (`read:jira:agent-interface`, `write:confluence:agent-interface`…) |
+| Status | GA | **Beta** ("Notion MCP (Beta)") | GA |
+
+### The one constraint that changes the plan: Slack
+
+Slack is the only one of the three that **will not register a client dynamically**. Its
+authorization server metadata offers `client_secret_post` and no `registration_endpoint`,
+and its docs are explicit that *only apps published in the Slack Marketplace, or a
+workspace's own internal app, may use MCP at all* — an unlisted app is prohibited, and a
+workspace admin has to approve it either way. Tokens are **user** tokens, not bot tokens.
+
+So Slack costs what Gmail cost: a registered app, credentials in the environment
+(`SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET`), and a review before anyone outside a single
+workspace can use it. Notion and Jira cost nothing to configure — the server hands us a
+`client_id` on first connect and the user signs in.
+
+That is why the allow-list carries a per-server registration mode rather than assuming
+every server registers itself ([D48](09-decisions.md)), and why Slack connects last.
 
 ### Notion
 
-- Public integration with OAuth. The user picks which pages the integration can see.
+One coarse scope (`default`) and no scope choices to make, which cuts both ways: nothing to
+get wrong at connect time, and nothing to narrow either — a connected Notion account is as
+broad as the pages the user shares with the integration during Notion's own consent step.
+Its access control is on Notion's side, not ours. The server is still labelled Beta.
 
-### Jira (Atlassian)
+### Atlassian (Jira)
 
-- OAuth 2.0 (3LO) app; API access is per Atlassian site the user selects.
+Its PRM is path-scoped, so the discovery URL carries the `/v2/mcp` path — a client that only
+looks at the origin finds a `404`. Its CORS headers still expose `Mcp-Session-Id`, which
+means it speaks a **2025-era** revision with sessions rather than the stateless 2026-07-28
+shape; that is handled by negotiating the era rather than by special-casing Atlassian
+([D47](09-decisions.md)). The scope list covers far more than Jira (Confluence, Bitbucket,
+Loom, goals, assets…), so we ask only for the Jira and search scopes we use.
 
-Notes for Slack, Notion and Jira above describe their direct APIs — relevant for events/webhooks and for the fallback. With MCP-first, their tools come from each app's MCP server.
+### What the spike did not settle
+
+- **Nobody has held a token yet.** The 401 challenges, the metadata and the scope lists are
+  real; the tool lists are not — ours come from `tools/list` at runtime, so what each server
+  actually offers is read live rather than written down here. Nothing about a live
+  `tools/call` is proven.
+- **Jira's eligibility rules.** Slack's are documented and strict; Atlassian's product
+  editions and admin-approval requirements were not confirmed from a primary source.
+- **The fallback question** (own code, or an integration platform, for apps with no good
+  server) stays open, because none of the three apps needs it.
+
+Each app also has a direct API, which still matters for two things MCP does not cover:
+webhooks for event triggers, and the fallback if a server is withdrawn.
 
 ## Connections UI — **built** (Phase 3)
 

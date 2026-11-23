@@ -73,9 +73,23 @@ Status: **Proposed**. Columns are a starting point and will change as we build.
 | `status` | `active` \| `paused` | Pause an agent without deleting it |
 | `updated_at` | timestamp | Edits |
 
-### MCP server catalog
+### MCP server catalog — **built** (Phase 5)
 
-The allow-list of MCP servers users can connect. Can start as a constant in code (`lib/mcp/servers.ts`) and move to a table later: `id`, `name`, `server_url`, `auth` (OAuth details), `read_only_tools` (tools *we* have reviewed as safe without approval), `enabled`.
+The allow-list stayed a constant in code (`lib/mcp/servers.ts`) rather than becoming a
+table, and should: it carries the `readOnlyTools` list, which is a judgement a person made
+about a specific server, and a row in a database is a strange place for a code review. A
+server not in that file cannot be connected or called at all (D49).
+
+Three tables came with it instead, because they hold things only the running app can know:
+
+| Table | What it is | Columns |
+|---|---|---|
+| `mcp_clients` | One OAuth client registration per authorization server. A registration identifies **Omnix**, not a user, so it is keyed by `issuer` and shared by everyone (D48) | `issuer` (pk), `server_id`, `client_id`, `client_secret_enc`, `info` (jsonb), timestamps |
+| `mcp_oauth_flows` | A connect flow part-way through the browser round trip. Claimed by `state` **and** user id, and deleted as it is claimed, which is what makes the PKCE verifier single-use | `state` (pk), `user_id`, `server_id`, `code_verifier_enc`, `discovery` (jsonb), `return_to`, `expires_at` |
+| `mcp_tool_cache` | The tool list a server last reported, per connected account — so neither a run nor a page waits on a third party to find out what an agent can do | `connection_id` (pk → connections), `tools` (jsonb), `fetched_at`, `error` |
+
+MCP accounts themselves are ordinary `connections` rows: `kind = "mcp"`, `provider` =
+`mcp:<server id>`, `server_url` set, and the same encrypted tokens as Gmail (D13).
 
 ### Tasks — event triggers
 

@@ -47,7 +47,8 @@ export function buildModelTools(tools: AnyTool[]): ModelTool[] {
       function: {
         name: toWireName(tool.key),
         description: tool.description,
-        parameters: tool.parameters,
+        // An MCP tool's schema is its server's to define, and is passed on untouched.
+        parameters: tool.openParameters ?? tool.parameters,
       },
     });
   }
