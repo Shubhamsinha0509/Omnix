@@ -1,220 +1,183 @@
-import type { CSSProperties } from "react";
-import Image from "next/image";
 import Link from "next/link";
-import { CalendarDays, Mail, MessageSquare, NotebookText, SquareKanban } from "lucide-react";
+import { CalendarDays, FileText, Layers, Mail, MessageSquare } from "lucide-react";
 
-import { agentAvatarUrl } from "@/components/custom/workspace/AgentAvatar";
+import { buttonVariants } from "@/components/ui/button";
+import { HeroWash } from "@/components/custom/design/HeroWash";
+import { RunStepRow } from "@/components/custom/design/RunStepRow";
+import { Logo } from "@/components/custom/shell/Logo";
+import { ThemeToggle } from "@/components/custom/shell/ThemeToggle";
+import { AgentAvatar } from "@/components/custom/workspace/AgentAvatar";
+import { cn } from "@/lib/utils";
 
-/** Where "Launch App" goes: the workspace, which sends signed-out visitors to sign in. */
 const APP_HREF = "/workspace";
 
 const NAV = [
-  { label: "Features", href: "#features" },
-  { label: "How it works", href: "#how-it-works" },
-  { label: "Integrations", href: "#integrations" },
-  { label: "Docs", href: "#docs" },
+  { label: "Features", href: "#how" },
+  { label: "How it works", href: "#how" },
+  { label: "Integrations", href: "#tools" },
+  { label: "Docs", href: "#how" },
 ];
 
-/** The apps agents connect to (docs/05-integrations.md). Generic icons, not brand marks. */
-const INTEGRATIONS = [
-  { name: "Gmail", icon: Mail },
-  { name: "Slack", icon: MessageSquare },
-  { name: "Notion", icon: NotebookText },
-  { name: "Jira", icon: SquareKanban },
-  { name: "Calendar", icon: CalendarDays },
+const TOOLS = [
+  { label: "Gmail", icon: Mail },
+  { label: "Slack", icon: MessageSquare },
+  { label: "Notion", icon: FileText },
+  { label: "Jira", icon: Layers },
+  { label: "Calendar", icon: CalendarDays },
 ];
 
-/** The indigo pill button from the theme: soft glow underneath, light edge on top. */
-function LaunchButton({ size = "md" }: { size?: "sm" | "md" }) {
-  return (
-    <Link
-      href={APP_HREF}
-      className={[
-        "inline-flex items-center justify-center rounded-xl font-medium text-white",
-        "bg-gradient-to-b from-[#8b8cf9] to-[#6366f1]",
-        "shadow-[0_10px_24px_-6px_rgba(99,102,241,0.65),inset_0_1px_0_rgba(255,255,255,0.35)]",
-        "transition hover:brightness-105 hover:shadow-[0_14px_30px_-6px_rgba(99,102,241,0.75),inset_0_1px_0_rgba(255,255,255,0.35)]",
-        "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300/60",
-        size === "sm" ? "h-9 px-4 text-sm" : "h-11 px-7 text-[15px]",
-      ].join(" ")}
-    >
-      Launch App
-    </Link>
-  );
-}
+const STEPS = [
+  { title: "Create an agent", text: "Name it, pick a blob, and write what it should do in plain words." },
+  { title: "Connect your tools", text: "Gmail, Slack, Notion and Jira. You choose which actions it may take." },
+  {
+    title: "Run it now or on a schedule",
+    text: "Chat with it, or let it run each morning on its own VM and report back.",
+  },
+];
 
-/** A soft glass bubble floating in the sky. */
-function Bubble({ className, delay = "0s" }: { className: string; delay?: string }) {
+/** The purple and teal blobs beside the hero, drawn without their avatar circle. */
+function HeroBlob({ kind }: { kind: "purple" | "teal" }) {
   return (
-    <div
-      aria-hidden
-      className={`omnix-motion absolute rounded-full ${className}`}
-      style={{
-        background:
-          "radial-gradient(circle at 32% 28%, rgba(255,255,255,0.95), rgba(255,255,255,0.35) 38%, rgba(196,190,255,0.35) 70%, rgba(170,180,255,0.15))",
-        boxShadow: "inset -6px -10px 24px rgba(150,140,255,0.25), 0 10px 30px rgba(140,150,220,0.15)",
-        animation: `omnix-float 9s ease-in-out ${delay} infinite`,
-      }}
-    />
-  );
-}
-
-/** A soft cloud made of blurred blobs. */
-function Cloud({ className, tone = "white" }: { className: string; tone?: "white" | "peach" }) {
-  const color = tone === "peach" ? "bg-[#fbc7ae]" : "bg-white";
-  return (
-    <div aria-hidden className={`omnix-motion pointer-events-none absolute ${className}`} style={{ animation: "omnix-drift 22s ease-in-out infinite" }}>
-      <div className={`absolute left-0 top-6 h-24 w-48 rounded-full ${color} opacity-80 blur-2xl`} />
-      <div className={`absolute left-16 top-0 h-32 w-40 rounded-full ${color} opacity-90 blur-2xl`} />
-      <div className={`absolute left-32 top-8 h-24 w-44 rounded-full ${color} opacity-80 blur-2xl`} />
-    </div>
-  );
-}
-
-/** One of the user's agents, floating on the hills (the DiceBear clay style used in the app). */
-function FloatingAgent({ seed, className, tilt, delay }: { seed: string; className: string; tilt: string; delay: string }) {
-  return (
-    <div
-      aria-hidden
-      className={`omnix-motion absolute ${className}`}
-      style={{ "--tilt": tilt, animation: `omnix-float 6s ease-in-out ${delay} infinite` } as CSSProperties}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element -- DiceBear serves SVG */}
-      <img
-        // Transparent background: in the app avatars sit in circles, here they float freely.
-        // DiceBear 10 only accepts hex here, so "transparent" is 8-digit hex with zero alpha.
-        src={`${agentAvatarUrl(seed)}&backgroundColor=00000000`}
-        alt=""
-        draggable={false}
-        className="size-full drop-shadow-[0_24px_30px_rgba(99,102,241,0.25)]"
-      />
-      {/* soft shadow on the snow */}
-      <div className="mx-auto -mt-2 h-4 w-2/3 rounded-full bg-indigo-900/10 blur-md" />
-    </div>
-  );
-}
-
-/** Rolling snow hills around a pale lake, drawn in SVG so it scales to any width. */
-function Landscape() {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 1440 560"
-      preserveAspectRatio="xMidYMax slice"
-      className="absolute inset-x-0 bottom-0 h-[58%] w-full"
-    >
-      <defs>
-        <linearGradient id="hill-far" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#f4f6fb" />
-          <stop offset="100%" stopColor="#dfe4f1" />
-        </linearGradient>
-        <linearGradient id="hill-near" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="100%" stopColor="#e9ecf4" />
-        </linearGradient>
-        <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#bfe0f2" />
-          <stop offset="100%" stopColor="#e6f3fa" />
-        </linearGradient>
-        <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#f7f8fb" stopOpacity="0" />
-          <stop offset="60%" stopColor="#f5f6f9" />
-          <stop offset="100%" stopColor="#f5f6f9" />
-        </linearGradient>
-      </defs>
-
-      {/* far hills */}
-      <path d="M0 210 C 160 90, 330 80, 470 190 C 560 120, 700 70, 860 150 C 980 70, 1180 60, 1300 170 C 1360 140, 1410 140, 1440 160 L1440 560 L0 560 Z" fill="url(#hill-far)" />
-      {/* lake */}
-      <path d="M430 330 C 560 300, 880 300, 1010 330 C 1060 350, 1000 410, 860 420 C 700 430, 560 425, 460 400 C 390 380, 380 345, 430 330 Z" fill="url(#lake)" opacity="0.9" />
-      {/* near hills, left and right, framing the lake */}
-      <path d="M0 260 C 140 180, 300 200, 420 300 C 470 345, 500 400, 470 460 L 0 560 Z" fill="url(#hill-near)" />
-      <path d="M1440 250 C 1300 170, 1140 190, 1030 290 C 970 345, 950 410, 990 470 L 1440 560 Z" fill="url(#hill-near)" />
-      {/* foreground snow fading into the page */}
-      <path d="M0 440 C 300 400, 520 470, 720 450 C 940 430, 1160 400, 1440 430 L1440 560 L0 560 Z" fill="#fbfbfd" />
-      <rect x="0" y="380" width="1440" height="180" fill="url(#ground)" />
+    <svg width="150" height="150" viewBox="0 0 96 96" aria-hidden="true">
+      {kind === "purple" ? (
+        <g transform="translate(0 4)">
+          <path d="M24 76c-7 0-9-11-2-15-4-11 6-19 13-13 2-11 17-13 21-4 9-6 19 3 15 11 8 3 8 15 0 17-3 6-40 6-47 4z" fill="#A88BC9" />
+          <circle cx="40" cy="52" r="7" fill="#fff" />
+          <circle cx="57" cy="50" r="7" fill="#fff" />
+          <circle cx="41" cy="50" r="3" fill="#1F2236" />
+          <circle cx="58" cy="48" r="3" fill="#1F2236" />
+          <circle cx="48" cy="64" r="2.5" fill="#1F2236" />
+        </g>
+      ) : (
+        <g transform="translate(0 4)">
+          <path d="M30 84V48c0-14 8-22 18-22s18 8 18 22v36l-6-5-6 5-6-5-6 5-6-5z" fill="#7FB3A3" />
+          <circle cx="62" cy="24" r="5" fill="none" stroke="#7FB3A3" strokeWidth="3" />
+          <circle cx="41" cy="50" r="6.5" fill="#fff" />
+          <circle cx="56" cy="50" r="6.5" fill="#fff" />
+          <circle cx="42" cy="51" r="3" fill="#1F2236" />
+          <circle cx="57" cy="51" r="3" fill="#1F2236" />
+          <path d="M42 61q6 6 12 0z" fill="#1F2236" />
+        </g>
+      )}
     </svg>
   );
 }
 
-export default function Home() {
+/** The public landing page (design/reference/01-landing.html). */
+export default function LandingPage() {
+  const big = "h-12 px-6 text-[15px]";
   return (
-    <main className="min-h-svh bg-[#f5f6f9] text-[#1e1b4b]">
-      {/* ── Hero ─────────────────────────────────────────────── */}
-      <section className="relative isolate min-h-[100svh] overflow-hidden bg-gradient-to-b from-[#d3ddef] via-[#e6ecf6] to-[#f5f6f9]">
-        {/* sky */}
-        <Cloud className="left-[4%] top-[14%] h-40 w-72" />
-        <Cloud className="right-[6%] top-[8%] h-40 w-72" />
-        <Cloud className="left-[38%] top-[2%] h-32 w-72 opacity-70" />
-        <Bubble className="left-[10%] top-[44%] hidden size-24 sm:block" delay="0s" />
-        <Bubble className="right-[12%] top-[38%] size-7" delay="1.5s" />
-        <Bubble className="left-[54%] top-[58%] size-12" delay="3s" />
-        <Bubble className="right-[22%] top-[22%] size-4" delay="2s" />
+    <div className="relative min-h-svh overflow-hidden bg-background">
+      <HeroWash className="-top-[120px] h-[820px]" />
 
-        {/* ground: hills, with peach mist drifting in front of their edges */}
-        <Landscape />
-        {/* On phones the mist would fill the whole width, so it only appears from `sm` up. */}
-        <Cloud className="-left-16 bottom-[20%] hidden h-40 w-72 opacity-70 sm:block" tone="peach" />
-        <Cloud className="-right-10 bottom-[24%] hidden h-40 w-72 opacity-70 sm:block" tone="peach" />
+      <header className="glass relative mx-4 mt-5 flex items-center gap-6 rounded-xl py-2.5 pr-3 pl-5 shadow-sm md:mx-auto md:max-w-[1040px]">
+        <Logo href="/" />
+        <nav aria-label="Site" className="mx-auto hidden items-center gap-7 md:flex">
+          {NAV.map((item) => (
+            <a key={item.label} href={item.href} className="text-muted-foreground no-underline hover:text-foreground">
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
+          <Link href="/sign-in" className={cn(buttonVariants({ variant: "ghost" }), "hidden md:inline-flex")}>
+            Sign in
+          </Link>
+          <Link href={APP_HREF} className={buttonVariants()}>
+            Launch app
+          </Link>
+        </div>
+      </header>
 
-        {/* agents */}
-        <FloatingAgent seed="omnix-scout" className="left-[4%] bottom-[20%] size-24 sm:left-[14%] sm:bottom-[16%] sm:size-48 lg:size-56" tilt="-8deg" delay="0s" />
-        <FloatingAgent seed="omnix-courier" className="right-[4%] bottom-[18%] size-20 sm:right-[12%] sm:bottom-[12%] sm:size-44 lg:size-52" tilt="10deg" delay="1.2s" />
-
-        {/* nav */}
-        <header className="absolute inset-x-0 top-5 z-20 px-4">
-          <nav className="mx-auto flex max-w-5xl items-center justify-between rounded-2xl border border-white/80 bg-white/55 px-4 py-3 shadow-[0_8px_30px_rgba(120,130,190,0.15)] backdrop-blur-xl">
-            <Link href="/" className="flex items-center gap-2.5">
-              <Image src="/logo.png" alt="" width={30} height={30} className="size-[30px]" loading="eager" />
-              <span className="text-lg font-semibold tracking-tight">Omnix</span>
-            </Link>
-            <ul className="hidden items-center gap-8 text-sm text-[#3b3a63] md:flex">
-              {NAV.map((item) => (
-                <li key={item.href}>
-                  <a href={item.href} className="transition hover:text-[#6366f1]">
-                    {item.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-            <LaunchButton size="sm" />
-          </nav>
-        </header>
-
-        {/* headline */}
-        <div className="relative z-10 mx-auto flex max-w-6xl flex-col items-center px-6 pt-32 text-center sm:pt-44">
-          {/* Two lines on wider screens, like the reference; free wrapping on phones. */}
-          <h1 className="text-[clamp(2.25rem,5.4vw,4.4rem)] font-semibold leading-[1.08] tracking-[-0.02em] text-balance text-[#1e1b4b]">
-            <span className="md:block md:whitespace-nowrap">Create, Connect &amp; Automate</span>{" "}
-            <span className="md:block md:whitespace-nowrap">AI Agents Instantly</span>
-          </h1>
-          <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-[#4a4870] sm:text-base">
-            Build personal AI agents, connect them to Gmail, Slack, Notion and Jira, and let them
-            work for you — on demand, on a schedule, or on their own virtual machine.
-          </p>
-          <div className="mt-9">
-            <LaunchButton />
-          </div>
+      <section className="relative mx-auto flex max-w-[1120px] flex-col items-center gap-6 px-6 pt-24 pb-10 text-center">
+        <div className="absolute top-[260px] left-0 hidden md:block">
+          <HeroBlob kind="purple" />
+        </div>
+        <div className="absolute top-[230px] right-0 hidden md:block">
+          <HeroBlob kind="teal" />
+        </div>
+        <h1 className="max-w-[920px] font-display text-[clamp(40px,7vw,76px)] leading-[1.04] font-bold tracking-[-0.02em]">
+          Create, Connect &amp; Automate AI Agents Instantly
+        </h1>
+        <p className="max-w-[600px] text-body-l text-muted-foreground">
+          Build personal AI agents, connect them to Gmail, Slack, Notion and Jira, and let them work for
+          you: on demand, on a schedule, or on their own virtual machine.
+        </p>
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
+          <Link href={APP_HREF} className={cn(buttonVariants(), big)}>
+            Launch app
+          </Link>
+          <a href="#how" className={cn(buttonVariants({ variant: "outline" }), big)}>
+            See how it works
+          </a>
         </div>
       </section>
 
-      {/* ── Integrations strip ───────────────────────────────── */}
-      <section id="integrations" className="relative -mt-24 pb-24 text-center">
-        <p className="text-sm text-[#4a4870]">Works with the tools you already use</p>
-        <ul className="mt-5 flex flex-wrap items-center justify-center gap-4 px-4">
-          {INTEGRATIONS.map(({ name, icon: Icon }) => (
-            <li key={name}>
-              <div
-                title={name}
-                className="flex size-16 items-center justify-center rounded-2xl border border-white bg-white/80 text-[#8a8aa3] shadow-[0_6px_20px_rgba(120,130,190,0.12)] transition hover:-translate-y-0.5 hover:text-[#6366f1]"
-              >
-                <Icon className="size-7" strokeWidth={1.75} />
-                <span className="sr-only">{name}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
+      {/* A run as it looks in the app: the same RunStepRow, with example steps. */}
+      <section className="relative mx-auto max-w-[880px] px-6">
+        <div className="flex flex-col gap-2 rounded-xl bg-run-panel p-5 text-left text-run-panel-foreground shadow-lg">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1 pt-1 pb-2">
+            <div className="flex items-center gap-2.5">
+              <span className="size-7">
+                <AgentAvatar seed="green" name="" />
+              </span>
+              <span className="font-semibold">savvyy</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#7C83F5]/20 px-2 py-0.5 text-caption font-medium text-[#C7CBFE]">
+                <span className="size-2 rounded-full bg-[#7C83F5]" />
+                Running
+              </span>
+            </div>
+            <span className="font-mono text-caption text-run-panel-muted">Weekdays 9:00 · isolated VM</span>
+          </div>
+          <ol className="m-0 flex list-none flex-col gap-2 p-0" aria-label="Example run">
+            <RunStepRow state="done" label="Searched Gmail for unread messages" time="0:02" />
+            <RunStepRow state="done" label="Read 5 emails and grouped 2 duplicates" time="0:06" />
+            <RunStepRow state="current" label="Writing your morning digest…" time="0:09" />
+            <RunStepRow state="pending" label="Post digest to #daily in Slack" time={null} />
+          </ol>
+        </div>
       </section>
-    </main>
+
+      <section id="tools" className="relative flex flex-col items-center gap-5 px-6 pt-16 pb-6">
+        <p className="text-muted-foreground">Works with the tools you already use</p>
+        <div className="flex flex-wrap justify-center gap-6">
+          {TOOLS.map(({ label, icon: Icon }) => (
+            <div key={label} className="flex flex-col items-center gap-2">
+              <span className="flex size-16 items-center justify-center rounded-lg border bg-card text-muted-foreground shadow-sm">
+                <Icon className="size-[22px]" />
+              </span>
+              <span className="text-body-s text-muted-foreground">{label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="how" className="relative mx-auto flex max-w-[1040px] scroll-mt-6 flex-col gap-8 px-6 pt-16 pb-24">
+        <h2 className="text-center font-display text-[32px] leading-9 font-semibold tracking-[-0.02em] md:text-[40px] md:leading-[44px]">
+          From idea to working agent in three steps
+        </h2>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          {STEPS.map((step, index) => (
+            <div key={step.title} className="flex flex-col gap-3 rounded-lg border bg-card p-6 shadow-sm">
+              <span className="font-display text-[32px] leading-9 font-bold text-brand">{index + 1}</span>
+              <h3 className="text-h3 font-semibold">{step.title}</h3>
+              <p className="text-muted-foreground">{step.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <footer className="relative mx-auto flex max-w-[1040px] flex-wrap justify-between gap-3 border-t p-6">
+        <span className="text-body-s text-muted-foreground">© 2026 Omnix</span>
+        <div className="flex gap-5 text-body-s">
+          {["Docs", "Privacy", "Terms"].map((label) => (
+            <a key={label} href="#how" className="text-muted-foreground no-underline hover:text-foreground">
+              {label}
+            </a>
+          ))}
+        </div>
+      </footer>
+    </div>
   );
 }

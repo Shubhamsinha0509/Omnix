@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2, Trash2, TriangleAlert } from "lucide-react";
+import { Loader2, TriangleAlert } from "lucide-react";
 
 import {
   AlertDialog,
@@ -18,15 +18,15 @@ import { Button } from "@/components/ui/button";
 import { deleteAgent } from "@/app/workspace/actions";
 
 /**
- * The "delete this agent" block with its confirmation. Shared by the settings page and
- * the configuration panel beside the chat, so both delete the same way.
+ * The "Delete savvyy" block (10-chat-config-settings) with its confirmation. Shared by the
+ * settings page and the configuration drawer, so both delete the same way.
  */
 export function DeleteAgent({
   agent,
   conversationCount,
 }: {
   agent: { id: string; name: string };
-  /** How many conversations go with it, for the warning. */
+  /** How many conversations go with it, for the confirmation. */
   conversationCount: number;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -46,26 +46,24 @@ export function DeleteAgent({
   };
 
   return (
-    <section className="rounded-xl border border-destructive/30 p-5">
-      <h2 className="font-semibold text-destructive">Delete this agent</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {agent.name} and{" "}
-        {conversationCount === 1 ? "its 1 conversation" : `its ${conversationCount} conversations`} will be
-        deleted. This can&apos;t be undone.
+    <section className="flex flex-col gap-2.5 rounded-lg border border-destructive p-4">
+      <h3 className="font-semibold text-destructive">Delete {agent.name}</h3>
+      <p className="text-body-s text-muted-foreground">
+        Removes the agent, its schedule and chat history. Connected accounts stay connected.
       </p>
       {error && (
-        <p role="alert" className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-body-s text-destructive">
           {error}
         </p>
       )}
       <Button
         type="button"
         variant="destructive"
-        className="mt-4"
+        size="sm"
+        className="self-start"
         disabled={isDeleting}
         onClick={() => setConfirmOpen(true)}
       >
-        <Trash2 />
         Delete agent
       </Button>
 
@@ -77,14 +75,16 @@ export function DeleteAgent({
             </AlertDialogMedia>
             <AlertDialogTitle>Delete {agent.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              The agent and every conversation you had with it will be permanently deleted.
+              {agent.name}, its schedule and{" "}
+              {conversationCount === 1 ? "its 1 chat" : `its ${conversationCount} chats`} will be
+              permanently deleted. This can&apos;t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={remove} disabled={isDeleting}>
               {isDeleting && <Loader2 className="animate-spin" />}
-              {isDeleting ? "Deleting..." : "Delete agent"}
+              {isDeleting ? "Deleting…" : "Delete agent"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

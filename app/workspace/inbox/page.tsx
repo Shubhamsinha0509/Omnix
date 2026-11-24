@@ -1,7 +1,11 @@
 import { notFound } from "next/navigation";
 
+import { PageWrap } from "@/components/custom/design/HeroWash";
 import Inbox, { type InboxView } from "@/components/custom/workspace/Inbox";
+import { eq } from "drizzle-orm";
+import { agents, db } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
+import { MOCK_INBOX_ITEMS } from "@/lib/mock-data";
 import { listInbox, type InboxItem } from "@/lib/notifications";
 import { TOOLS } from "@/lib/tools";
 
@@ -9,23 +13,36 @@ import { TOOLS } from "@/lib/tools";
  * In-app delivery: results from tasks that ran on their own, and approval cards from
  * background runs waiting on a decision (decision D42).
  */
-export default async function InboxPage() {
+export default async function InboxPage({
+  searchParams,
+}: {
+  /** `?preview=sample` (development only) shows sample items, for design checks. */
+  searchParams: Promise<{ preview?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) notFound();
 
   const items = await listInbox(user.id);
+  const { preview } = await searchParams;
+  if (process.env.NODE_ENV !== "production" && preview === "sample") {
+    const [agent] = await db
+      .select({ id: agents.id, name: agents.name, avatarSeed: agents.avatarSeed })
+      .from(agents)
+      .where(eq(agents.userId, user.id))
+      .limit(1);
+    if (agent) {
+      return (
+        <PageWrap width="wide">
+          <Inbox items={MOCK_INBOX_ITEMS(agent)} />
+        </PageWrap>
+      );
+    }
+  }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-12">
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
-        <p className="mt-1.5 text-muted-foreground">
-          What your agents did while you were away, and anything they need you to approve.
-        </p>
-      </header>
-
+    <PageWrap width="wide">
       <Inbox items={items.map(toView)} />
-    </div>
+    </PageWrap>
   );
 }
 

@@ -3,7 +3,9 @@
 import { isValidElement, memo, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { cn } from "cn";
+import { FileDown } from "lucide-react";
+import { isFileHref } from "@/lib/file-links";
+import { cn } from "@/lib/utils";
 
 import {
   CodeBlock,
@@ -15,6 +17,7 @@ import {
   CodeBlockTitle,
 } from "@/components/ui/code-block";
 import { useHighlightedCode } from "@/hooks/use-highlighted-code";
+import { ChatTable, ChatTableCell, ChatTableHeaderCell } from "@/components/custom/design/ChatTable";
 
 /** A fenced code block, highlighted by shiki and safe to re-render while it streams. */
 function CodeFence({ code, language }: { code: string; language: string }) {
@@ -69,31 +72,37 @@ const components: Components = {
   li: ({ children }) => <li className="[&>p]:my-0">{children}</li>,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
-  a: ({ children, href }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer nofollow"
-      className="font-medium underline underline-offset-2 hover:text-primary"
-    >
-      {children}
-    </a>
-  ),
+  a: ({ children, href }) =>
+    // A file the agent shared from its VM: drawn as a file to download, not a web link.
+    isFileHref(href) ? (
+      <a
+        href={href}
+        download
+        className="mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 align-middle text-body-s font-medium text-foreground no-underline shadow-xs hover:bg-muted"
+      >
+        <FileDown className="size-4 shrink-0 text-brand" />
+        <span className="truncate">{children}</span>
+      </a>
+    ) : (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer nofollow"
+        className="font-medium text-brand-text hover:underline"
+      >
+        {children}
+      </a>
+    ),
   blockquote: ({ children }) => (
     <blockquote className="my-3 border-s-2 ps-3 text-muted-foreground first:mt-0 last:mb-0">
       {children}
     </blockquote>
   ),
   hr: () => <hr className="my-4 border-border" />,
-  table: ({ children }) => (
-    <div className="my-3 w-full overflow-x-auto first:mt-0 last:mb-0">
-      <table className="w-full border-collapse text-left text-xs">{children}</table>
-    </div>
-  ),
-  th: ({ children }) => (
-    <th className="border border-border bg-muted px-2.5 py-1.5 font-semibold">{children}</th>
-  ),
-  td: ({ children }) => <td className="border border-border px-2.5 py-1.5 align-top">{children}</td>,
+  // Tables merge duplicate rows (the same thread twice) into one with a ×N badge.
+  table: ({ children }) => <ChatTable>{children}</ChatTable>,
+  th: ({ children }) => <ChatTableHeaderCell>{children}</ChatTableHeaderCell>,
+  td: ({ children }) => <ChatTableCell>{children}</ChatTableCell>,
   // Inline code. Fenced blocks never reach this: `pre` below replaces them whole.
   code: ({ children, className }) => (
     <code className={cn("rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]", className)}>
@@ -112,7 +121,7 @@ const components: Components = {
  */
 function MarkdownImpl({ content, className }: { content: string; className?: string }) {
   return (
-    <div className={cn("min-w-0 text-sm leading-relaxed", className)}>
+    <div className={cn("min-w-0 text-body", className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {content}
       </ReactMarkdown>

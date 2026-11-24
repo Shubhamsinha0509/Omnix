@@ -3,12 +3,21 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
-import { CheckCheck, Inbox as InboxIcon, ShieldCheck, TriangleAlert } from "lucide-react";
+import { format, isToday, isYesterday } from "date-fns";
+import { Filter, Inbox as InboxIcon, MessageSquare } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { markEverythingRead, markNotificationRead } from "@/app/workspace/inbox/actions";
 import type { ApprovalDecision, ApprovalRequest } from "@/lib/agent/events";
+import { cn } from "@/lib/utils";
 import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
 import { Markdown } from "./Markdown";
@@ -31,9 +40,26 @@ export type InboxView = {
   approvalState: "pending" | ApprovalDecision | null;
 };
 
+/** "2m", "9:00", "Yesterday", "Nov 18" — list times (`.cap.sub`). */
+function listTime(date: Date) {
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60_000);
+  if (minutes < 60) return `${Math.max(1, minutes)}m`;
+  if (isToday(date)) return format(date, "H:mm");
+  if (isYesterday(date)) return "Yesterday";
+  return format(date, "MMM d");
+}
+
+const dayOf = (date: Date) => (isToday(date) ? "Today" : isYesterday(date) ? "Yesterday" : "Earlier");
+
+/** First line of a Markdown body, as a plain preview. */
+function preview(body: string) {
+  const line = body.split("\n").find((text) => text.replace(/[#>*_`|\-\s]/g, "").length > 0) ?? "";
+  return line.replace(/[#>*_`|]/g, "").replace(/\s+/g, " ").trim();
+}
+
 /**
- * The inbox: what the user's agents did while they weren't watching, and anything a
- * background run is waiting to be allowed to do.
+ * The inbox (14-inbox): what agents did while the user wasn't watching, and anything a
+ * background run is waiting to be allowed to do — a list beside the selected item.
  *
  * A result's body is the agent's own words, rendered as Markdown — the same fixed set of
  * tags as a chat reply, no raw HTML (D19), because the words may be quoting an email the
@@ -43,9 +69,28 @@ export default function Inbox({ items }: { items: InboxView[] }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [deciding, setDeciding] = useState<string | null>(null);
+  const [agentFilter, setAgentFilter] = useState<string | null>(null);
   const [, startAction] = useTransition();
 
-  const unread = items.filter((item) => item.unread).length;
+  const agents = [
+    ...new Map(items.filter((item) => item.agentId).map((item) => [item.agentId!, item.agentName ?? "Agent"])),
+  ];
+  const shown = items.filter((item) => !agentFilter || item.agentId === agentFilter);
+  // A decision waiting on the user stays pinned above whatever is open (14-inbox); the
+  // pane opens on the newest report.
+  const pinned = shown.find((item) => item.approvalState === "pending" && item.approval) ?? null;
+  const [selectedId, setSelectedId] = useState<string | null>(
+    shown.find((item) => !item.approval)?.id ?? shown[0]?.id ?? null,
+  );
+  const selected = shown.find((item) => item.id === selectedId) ?? shown[0] ?? null;
+  const card = selected?.approval ? selected : pinned;
+
+  const open = (item: InboxView) => {
+    setSelectedId(item.id);
+    if (item.unread && item.kind !== "approval_request") {
+      startAction(async () => void (await markNotificationRead(item.id)));
+    }
+  };
 
   /**
    * Answers a card. The run itself is still parked on this decision in Inngest, so the
@@ -55,19 +100,16 @@ export default function Inbox({ items }: { items: InboxView[] }) {
     if (!item.approval) return;
     setError(null);
     setDeciding(item.approval.id);
-
     try {
       const response = await fetch(`/api/approvals/${item.approval.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision }),
       });
-
       if (!response.ok) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
         setError(body?.error ?? "That decision couldn't be saved. Please try again.");
       } else {
-        // The agent picks it up in the background; the row is already decided.
         startAction(() => {
           void markNotificationRead(item.id);
           router.refresh();
@@ -80,120 +122,186 @@ export default function Inbox({ items }: { items: InboxView[] }) {
     }
   };
 
-  return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {unread > 0 ? `${unread} unread` : "Nothing unread"}
-        </p>
-        {unread > 0 && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => startAction(async () => void (await markEverythingRead()))}
-          >
-            <CheckCheck />
+  const groups = new Map<string, InboxView[]>();
+  for (const item of shown) {
+    const day = dayOf(new Date(item.createdAt));
+    groups.set(day, [...(groups.get(day) ?? []), item]);
+  }
+
+  const header = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-1">
+        <h1 className="font-display text-h1 font-semibold tracking-[-0.015em]">Inbox</h1>
+        <p className="text-muted-foreground">Reports and requests from your agents.</p>
+      </div>
+      <div className="flex gap-2">
+        {items.some((item) => item.unread) && (
+          <Button size="sm" variant="ghost" onClick={() => startAction(async () => void (await markEverythingRead()))}>
             Mark all as read
           </Button>
         )}
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button size="sm" variant="outline" />}>
+            <Filter />
+            {agentFilter ? (agents.find(([id]) => id === agentFilter)?.[1] ?? "Agent") : "All agents"}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => setAgentFilter(null)}>All agents</DropdownMenuItem>
+              {agents.map(([id, name]) => (
+                <DropdownMenuItem key={id} onClick={() => setAgentFilter(id)}>
+                  {name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+    </div>
+  );
 
+  if (items.length === 0) {
+    return (
+      <>
+        {header}
+        <div className="flex flex-col items-center gap-3 rounded-lg border-[1.5px] border-dashed border-input px-6 py-16 text-center">
+          <InboxIcon className="size-8 text-muted-foreground" />
+          <h2 className="text-h2 font-semibold">Nothing here yet</h2>
+          <p className="max-w-sm text-muted-foreground">
+            When one of your agents finishes a task — or needs you to approve something it wants to do —
+            it turns up here.
+          </p>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {header}
       {error && (
-        <p role="alert" className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-body-s text-destructive">
           {error}
         </p>
       )}
-
-      {items.length === 0 ? (
-        <div className="mt-6 flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-12 text-center">
-          <InboxIcon className="size-8 text-muted-foreground" />
-          <h2 className="font-semibold">Nothing here yet</h2>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            When one of your agents finishes a task — or needs you to approve something it wants to
-            do — it turns up here.
-          </p>
-        </div>
-      ) : (
-        <ul className="mt-6 flex flex-col gap-3">
-          {items.map((item) => (
-            <li
-              key={item.id}
-              className={`rounded-xl border p-4 ${item.unread ? "border-primary/30 bg-primary/[0.03]" : ""}`}
-            >
-              <div className="flex items-start gap-3">
-                {item.agentAvatarSeed ? (
-                  <div className="mt-0.5 size-7 shrink-0">
-                    <AgentAvatar seed={item.agentAvatarSeed} name={item.agentName ?? "Agent"} />
-                  </div>
-                ) : (
-                  <InboxIcon className="mt-1 size-5 shrink-0 text-muted-foreground" />
-                )}
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {item.kind === "approval_request" && (
-                      <ShieldCheck className="size-4 text-amber-600 dark:text-amber-400" />
+      <div className="flex flex-col items-stretch gap-6 md:flex-row md:items-start">
+        {/* The list */}
+        <div className="divide-y overflow-hidden rounded-lg border bg-card md:w-[380px] md:shrink-0">
+          {[...groups].map(([day, dayItems]) => (
+            <div key={day} className="divide-y">
+              <div className="bg-muted px-4 py-2.5 text-caption font-medium text-muted-foreground">{day}</div>
+              {dayItems.map((item) => {
+                const isSelected = selected?.id === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => open(item)}
+                    aria-current={isSelected ? "true" : undefined}
+                    className={cn(
+                      "flex w-full cursor-pointer items-start gap-3 px-4 py-3.5 text-left text-foreground transition-colors hover:bg-muted/60",
+                      isSelected && "bg-accent hover:bg-accent",
                     )}
-                    {item.kind === "task_failed" && <TriangleAlert className="size-4 text-destructive" />}
-                    <span className="font-medium">{item.title}</span>
-                    {item.unread && <span className="size-1.5 rounded-full bg-primary" />}
-                  </div>
-
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {item.agentName ?? "Omnix"}
-                    {item.taskName ? ` · ${item.taskName}` : ""} ·{" "}
-                    {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
-                  </p>
-
-                  {item.approval ? (
-                    <>
-                      <p className="mt-2 text-sm text-muted-foreground">{item.body}</p>
-                      <ApprovalCard
-                        request={item.approval}
-                        state={deciding === item.approval.id ? "deciding" : item.approvalState ?? "pending"}
-                        busy={deciding !== null}
-                        onDecide={(decision) => void decide(item, decision)}
-                      />
-                    </>
-                  ) : (
-                    <div className="mt-2">
-                      <Markdown content={item.body} />
-                    </div>
-                  )}
-
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
-                    {item.runId && item.agentId && (
-                      <Link
-                        href={`/workspace/agent/${item.agentId}/runs/${item.runId}`}
-                        className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                      >
-                        See the run
-                      </Link>
-                    )}
-                    {item.agentId && (
-                      <Link
-                        href={`/workspace/agent/${item.agentId}/tasks`}
-                        className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                      >
-                        The task
-                      </Link>
-                    )}
-                    {item.unread && (
-                      <button
-                        type="button"
-                        className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                        onClick={() => startAction(async () => void (await markNotificationRead(item.id)))}
-                      >
-                        Mark as read
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </li>
+                  >
+                    <span className="mt-2 flex w-2 shrink-0">
+                      {item.unread && (
+                        <span className="size-2 rounded-full bg-brand" aria-label="Unread" />
+                      )}
+                    </span>
+                    <span className="size-8 shrink-0">
+                      {item.agentAvatarSeed ? (
+                        <AgentAvatar seed={item.agentAvatarSeed} name="" />
+                      ) : (
+                        <InboxIcon className="size-5 text-muted-foreground" />
+                      )}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="flex items-center gap-2">
+                        <span className="flex-1 truncate text-caption font-medium text-muted-foreground">
+                          {item.agentName ?? "Omnix"}
+                        </span>
+                        <span className="text-caption font-medium text-muted-foreground">
+                          {listTime(new Date(item.createdAt))}
+                        </span>
+                      </span>
+                      <span className={item.unread ? "font-semibold" : "font-medium"}>
+                        {item.kind === "task_failed" ? "Run failed" : item.title}
+                      </span>
+                      <span className="truncate text-body-s text-muted-foreground">
+                        {item.approval ? item.approval.summary : preview(item.body)}
+                      </span>
+                      {item.approvalState === "pending" && (
+                        <Badge variant="warn" className="mt-1">Needs approval</Badge>
+                      )}
+                      {item.kind === "task_failed" && (
+                        <Badge variant="err" className="mt-1">Failed</Badge>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           ))}
-        </ul>
-      )}
-    </div>
+        </div>
+
+        {/* The selected item */}
+        {selected && (
+          <article className="flex min-w-0 flex-1 flex-col gap-5 rounded-lg border bg-card p-7 shadow-sm">
+            {card?.approval && (
+              <ApprovalCard
+                request={card.approval}
+                state={deciding === card.approval.id ? "deciding" : (card.approvalState ?? "pending")}
+                busy={deciding !== null}
+                onDecide={(decision) => void decide(card, decision)}
+              />
+            )}
+            <div className="flex items-center gap-3">
+              {selected.agentAvatarSeed && (
+                <span className="size-10 shrink-0">
+                  <AgentAvatar seed={selected.agentAvatarSeed} name="" />
+                </span>
+              )}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <h2 className="text-h2 font-semibold">{selected.title}</h2>
+                <span className="text-body-s text-muted-foreground">
+                  {selected.agentName ?? "Omnix"} ·{" "}
+                  {format(new Date(selected.createdAt), isToday(new Date(selected.createdAt)) ? "'today at' h:mm a" : "MMM d 'at' h:mm a")}
+                  {selected.taskName ? ` · ${selected.taskName}` : " · scheduled run"}
+                </span>
+              </div>
+            </div>
+            {selected.body && <Markdown content={selected.body} />}
+            <div className="flex flex-wrap gap-2">
+              {selected.agentId && (
+                <Link
+                  href={`/workspace/agent/${selected.agentId}?new=1`}
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
+                >
+                  <MessageSquare />
+                  Ask a follow-up
+                </Link>
+              )}
+              {selected.runId && selected.agentId && (
+                <Link
+                  href={`/workspace/agent/${selected.agentId}/runs/${selected.runId}`}
+                  className={buttonVariants({ variant: "ghost", size: "sm" })}
+                >
+                  See the run
+                </Link>
+              )}
+              {selected.unread && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => startAction(async () => void (await markNotificationRead(selected.id)))}
+                >
+                  Mark as read
+                </Button>
+              )}
+            </div>
+          </article>
+        )}
+      </div>
+    </>
   );
 }

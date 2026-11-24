@@ -1,4 +1,5 @@
 import { GMAIL_TOOLS } from "./gmail";
+import { SANDBOX_TOOLS } from "./sandbox";
 import { timeNow } from "./time";
 import { webFetch, webSearch } from "./web";
 import { isNativeTool, type AnyTool, type ToolDefinition } from "./types";
@@ -14,6 +15,8 @@ export const TOOLS: Record<string, AnyTool> = {
   [webSearch.key]: webSearch,
   [webFetch.key]: webFetch,
   ...Object.fromEntries(GMAIL_TOOLS.map((tool) => [tool.key, tool])),
+  // The agent's own VM (Phase 6). Offered only when E2B is configured (selection.ts).
+  ...Object.fromEntries(SANDBOX_TOOLS.map((tool) => [tool.key, tool])),
 };
 
 /**
@@ -47,7 +50,8 @@ export function buildModelTools(tools: AnyTool[]): ModelTool[] {
       function: {
         name: toWireName(tool.key),
         description: tool.description,
-        parameters: tool.parameters,
+        // An MCP tool's schema is its server's to define, and is passed on untouched.
+        parameters: tool.openParameters ?? tool.parameters,
       },
     });
   }

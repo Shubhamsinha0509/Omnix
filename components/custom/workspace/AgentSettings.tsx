@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -83,7 +83,7 @@ export default function AgentSettings({ agent, conversationCount, tools, connect
 
       <Separator className="my-10" />
 
-      <AgentTools agentId={agent.id} tools={tools} connections={connections} />
+      <AgentTools agentId={agent.id} agentName={agent.name} tools={tools} connections={connections} />
 
       <Separator className="my-10" />
 

@@ -53,7 +53,7 @@ quota on Gemini's free tier).
 - [x] Tools: `gmail.search`, `gmail.read`, `gmail.create_draft`, `gmail.send` — `lib/tools/gmail.ts` over `lib/integrations/gmail.ts`
 - [x] Approvals: table, inline approval card in chat, execute stored payload — `lib/agent/approvals.ts`, `resumeAgent()`, `POST /api/approvals/:id` (decision D35)
 - [x] Agent settings → Tools: choose tools + connection per agent — `agent_tools` table, `resolveAgentTools()`, `components/custom/workspace/AgentTools.tsx`
-- [x] Connections page — `/workspace/connections`
+- [x] Connections page — `/workspace/integrations`
 - [x] Google Cloud set up: Gmail API enabled, consent screen in Testing, test users added, redirect URI registered, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env` — steps in [connecting Gmail](README.md#connecting-gmail)
 - [ ] Walk the live loop against a real mailbox: connect → search → read → draft → send with an approval
 - [ ] Start reading Google's verification requirements (restricted scopes + CASA) — see [security](07-security.md#google-verification)
@@ -127,23 +127,66 @@ pressing than it was in Phase 3, not less.
 
 **Done when:** agents can use Slack, Notion and Jira.
 
-- [ ] Spike: confirm Slack, Notion and Jira have usable official remote MCP servers with OAuth → confirm D17, decide fallback for any gaps
-- [ ] MCP client in the agent runner (remote HTTP servers), tool list caching
-- [ ] MCP server allow-list (`lib/mcp/servers.ts`) and per-user MCP OAuth connections
-- [ ] Approval-by-default for MCP tools; reviewed read-only list per server
-- [ ] Slack via MCP (also as a delivery channel for task results)
-- [ ] Notion via MCP
-- [ ] Jira via MCP
-- [ ] Event triggers (new email via Gmail push, Slack events)
+Notion and Jira are built and connectable; Slack is built but cannot be connected until
+there is a Slack app (D48), and event triggers are not started.
+
+- [x] Spike: confirm Slack, Notion and Jira have usable official remote MCP servers with OAuth → D17 confirmed as D46; findings in [integrations](05-integrations.md#the-phase-5-spike-22-november-2026). No fallback needed for these three; Slack is the awkward one — it refuses dynamic client registration and allows only Marketplace-published or workspace-internal apps (D48)
+- [x] MCP client in the agent runner (remote HTTP servers), tool list caching — `lib/mcp/client.ts` over the official v2 SDK (D47), with the protocol era negotiated per connection; the list is cached in `mcp_tool_cache` and refreshed hourly by `lib/inngest/mcp.ts`, on connect, and by **Refresh tools** on the tile
+- [x] MCP server allow-list (`lib/mcp/servers.ts`) and per-user MCP OAuth connections — Notion and Jira register Omnix dynamically and need no configuration; Slack needs an app (D48). Tokens live in `connections` (`kind: "mcp"`), encrypted like Gmail's (D13); the connect flow is `app/api/connections/mcp/`
+- [x] Approval-by-default for MCP tools; reviewed read-only list per server — a tool is `write` unless its name is in that server's `readOnlyTools`, and the server's own `readOnlyHint` is deliberately not consulted
+- [x] Notion via MCP — all 20 tiles, agent tool settings grouped by server, and `/workspace/integrations` connect and disconnect (with revocation where the server publishes an endpoint)
+- [x] Jira via MCP — same flow; its server is still on a 2025-era protocol revision, which the era negotiation handles rather than a special case
+- [ ] Walk a connected account end to end: sign in at the consent screen → `tools/list` → a read tool in chat → a write tool with an approval
+- [ ] Slack via MCP (also as a delivery channel for task results) — **blocked**: Slack's MCP server has no dynamic client registration and allows only a Marketplace-published or workspace-internal app, with admin approval (D48). The allow-list entry, scopes and connect flow are built and the tile says why it is disabled; its `readOnlyTools` list is deliberately empty until a real `tools/list` can be seen, so every Slack tool would ask
+- [ ] Event triggers (new email via Gmail push, Slack events) — not started. Both legs need infrastructure that doesn't exist yet: a Google Cloud Pub/Sub topic and a verified webhook for Gmail, and a Slack app for Slack events. `tasks.trigger` would also gain `event`, plus an `event` jsonb column ([data model](03-data-model.md#tasks--event-triggers))
+
+### What is verified, and what isn't
+
+**Checked against the real servers, 22 Nov 2026** — 98 checks, no user account needed.
+Re-run them with `npm run verify:mcp -- --live` (`scripts/verify-mcp.ts`):
+
+- **Discovery, registration and consent URLs are real.** Against `mcp.notion.com` and
+  `mcp.atlassian.com`, the client walked RFC 9728 protected-resource metadata, registered
+  Omnix dynamically (both issued a `client_id` and secret, now stored encrypted in
+  `mcp_clients`), and produced an authorization URL carrying a PKCE `S256` challenge, our
+  own redirect URI, the RFC 8707 `resource` parameter naming the server, and **our** seven
+  Jira scopes rather than the forty the server lists. The issuer each flow resolved was
+  recorded for the RFC 9207 check on the way back.
+- **The connect flow is single-use and per-user.** A flow is claimed by `state` *and* user
+  id, and the claim deletes it: another user's id finds nothing, a second claim finds
+  nothing, and an expired row is refused.
+- **Credentials are encrypted and bound.** A registration secret is unreadable in the row,
+  carries the `v1:` prefix, and will not decrypt under another issuer's AAD.
+- **The tool mapping is safe by default.** From a cached list: a reviewed read is
+  `risk: "read"`, everything else — including a delete tool — is `write` and asks;
+  `executeWrite` and `executeDestructive` are not in Jira's read list; a tool name that
+  can't be put on the wire is dropped rather than mangled; every MCP tool is marked
+  untrusted; descriptions are attributed to their server; and an approval card shows the
+  tool, the server and the real arguments.
+- **Arguments are not mangled.** The loose checker keeps undeclared and deeply nested
+  properties intact (the strict one drops them, which is why MCP tools don't use it) and
+  refuses a non-object, a missing required field, or 70 KB of arguments.
+- **A connected server grants nothing by itself.** Its tools appear in the agent's settings
+  switched off, and a run offers none of them until one is turned on.
+
+**Not yet done against a live account.** Nobody has signed in at a consent screen, so the
+code exchange, `tools/list`, `tools/call`, the token refresh and the approval path for an
+MCP tool are code that type-checks and is unit-checked, not code that is known to work —
+the same position Phase 3 is in with Gmail. The two should be walked together.
+
+Also unproven: Slack anything (see above), and the `legacy` protocol era in practice —
+Atlassian's CORS headers say it still uses sessions, and `mode: "auto"` is written to fall
+back, but the fallback has only been exercised as far as the auth wall.
 
 ## Phase 6 — Dedicated VMs
 
 **Done when:** a user can switch an agent to "Dedicated VM" and it can run code and use a browser.
 
-- [ ] Spike: confirm E2B covers browser, network allow-lists, pause/resume and pricing for our needs
-- [ ] `sandboxes` table; E2B create / pause / resume / destroy lifecycle
-- [ ] Tools: `sandbox.run_code`, `sandbox.files`, `sandbox.browser`
-- [ ] Runtime toggle in agent settings; VM status indicator
+- [ ] Spike: confirm E2B covers browser, network allow-lists, pause/resume and pricing for our needs (API confirmed from E2B's docs and SDK types; allow-lists and pricing still open)
+- [x] `sandboxes` table; E2B create / pause / resume / destroy lifecycle (`lib/sandbox`, D50). Verified live against E2B on 2026-11-24 (`npm run verify:vm -- --live`, 20 checks: start in ~8.5 s, one VM for two clicks, pause and resume keep files, stop deletes it)
+- [x] Tools: `sandbox.run_code` (python, bash), `sandbox.write_file` / `read_file` / `list_files`, `sandbox.open_browser` (D52). Off by default; switched on per agent in the Tools tab. Verified live by calling each tool against a real VM, and in a real chat on 2026-11-24 (cody wrote Python, asked for approval, ran it and read its result file back). Code runs are also shown in a terminal window on the VM's screen
+- [x] Runtime toggle in agent settings; VM status indicator. The Isolated VM switch in Settings turns all VM tools on or off, with "Run code without asking" (D53); status and controls are in the chat's run panel (`VmCard`). Checked in the app on 2026-11-24
+- [x] VM know-how in the system prompt, a folder per scheduled task, and a warning on tasks that would wait for approval (D53). Not yet exercised by a model: the free OpenRouter quota ran out
 - [ ] VM usage tracked per run
 
 ## Phase 7 — Ready to launch

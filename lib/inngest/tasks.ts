@@ -201,6 +201,7 @@ export const runTask = inngest.createFunction(
       user,
       trigger: trigger === "manual" ? "manual" : "schedule",
       taskId: task.id,
+      taskName: task.name,
       conversationId: null,
       history: [{ role: "user", content: task.prompt }],
       timezone: task.timezone,

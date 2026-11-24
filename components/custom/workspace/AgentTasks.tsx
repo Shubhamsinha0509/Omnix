@@ -36,6 +36,8 @@ import { TASK_LIMITS } from "@/lib/agent-limits";
 import { describeSchedule, nextOccurrence } from "@/lib/schedule/cron";
 // Type only, so nothing from the task module itself reaches the browser.
 import type { TaskView } from "@/lib/tasks";
+import type { VmState } from "@/lib/vm-state";
+import { TaskApprovalWarning } from "./VmSetting";
 
 type Props = {
   agentId: string;
@@ -43,6 +45,8 @@ type Props = {
   tasks: TaskView[];
   /** True in the narrow panel beside the chat, which stacks the form's fields. */
   compact?: boolean;
+  /** The agent's VM setting: a scheduled task that would wait for approval says so. */
+  vm?: VmState;
 };
 
 const DEFAULT_SCHEDULE = "0 9 * * 1-5";
@@ -56,7 +60,7 @@ const DEFAULT_SCHEDULE = "0 9 * * 1-5";
  * the next run is worked out as you type — a schedule you can't see the consequences of
  * is a schedule you find out about at 3am.
  */
-export default function AgentTasks({ agentId, agentName, tasks: fromServer, compact = false }: Props) {
+export default function AgentTasks({ agentId, agentName, tasks: fromServer, compact = false, vm }: Props) {
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -136,6 +140,8 @@ export default function AgentTasks({ agentId, agentName, tasks: fromServer, comp
       {editing === "new" && (
         <TaskForm
           agentId={agentId}
+          agentName={agentName}
+          vm={vm}
           compact={compact}
           onSaved={apply}
           onDone={() => setEditing(null)}
@@ -164,6 +170,8 @@ export default function AgentTasks({ agentId, agentName, tasks: fromServer, comp
             <li key={task.id}>
               <TaskForm
                 agentId={agentId}
+                agentName={agentName}
+                vm={vm}
                 task={task}
                 compact={compact}
                 onSaved={apply}
@@ -296,6 +304,8 @@ function describeDelivery(deliver: string[]) {
 
 type FormProps = {
   agentId: string;
+  agentName: string;
+  vm?: VmState;
   task?: TaskView;
   compact: boolean;
   /** Called with a successful save, before the form closes, to show it straight away. */
@@ -305,9 +315,9 @@ type FormProps = {
 };
 
 /** The presets the form offers. "Custom" hands over the cron expression itself. */
-type Preset = "daily" | "weekdays" | "weekly" | "hourly" | "quarter" | "custom";
+export type Preset = "daily" | "weekdays" | "weekly" | "hourly" | "quarter" | "custom";
 
-function TaskForm({ agentId, task, compact, onSaved, onDone, onError }: FormProps) {
+function TaskForm({ agentId, agentName, vm, task, compact, onSaved, onDone, onError }: FormProps) {
   const initial = task?.schedule ?? DEFAULT_SCHEDULE;
   const read = fromCron(initial);
 
@@ -539,6 +549,9 @@ function TaskForm({ agentId, task, compact, onSaved, onDone, onError }: FormProp
         <span className="text-muted-foreground">Enabled</span>
       </label>
 
+      {/* Runs on its own with nobody to approve: warn if it would wait (22). */}
+      {!manual && enabled && vm && <TaskApprovalWarning agentId={agentId} agentName={agentName} vm={vm} />}
+
       <div className="flex items-center gap-2">
         <Button type="submit" size="sm" disabled={isSaving || !name.trim() || !prompt.trim()}>
           {isSaving ? <Loader2 className="animate-spin" /> : <Check />}
@@ -557,7 +570,7 @@ const clamp = (value: number, min: number, max: number) =>
   Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : min;
 
 /** The preset and its settings as a cron expression. */
-function toCron(preset: Preset, time: string, weekday: number) {
+export function toCron(preset: Preset, time: string, weekday: number) {
   const [hour, minute] = time.split(":").map((part) => clamp(Number(part), 0, 59));
   switch (preset) {
     case "daily":
@@ -576,7 +589,7 @@ function toCron(preset: Preset, time: string, weekday: number) {
 }
 
 /** An existing expression back into the form's controls, or "custom" if it isn't one of them. */
-function fromCron(expression: string): { preset: Preset; time: string; weekday: number } {
+export function fromCron(expression: string): { preset: Preset; time: string; weekday: number } {
   const fallback = { preset: "custom" as Preset, time: "09:00", weekday: 1 };
   const [minute, hour, dayOfMonth, month, dayOfWeek] = expression.trim().split(/\s+/);
   if (!dayOfWeek || dayOfMonth !== "*" || month !== "*") return fallback;
@@ -601,7 +614,7 @@ function fromCron(expression: string): { preset: Preset; time: string; weekday: 
 }
 
 /** An instant as the clock reads it in the task's timezone. */
-function formatIn(instant: Date, timezone: string) {
+export function formatIn(instant: Date, timezone: string) {
   try {
     return new Intl.DateTimeFormat("en-GB", {
       timeZone: timezone,

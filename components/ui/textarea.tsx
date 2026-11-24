@@ -1,12 +1,13 @@
 import * as React from "react"
-import { cn } from "cn"
+import { cn } from "@/lib/utils"
 
+/** The design's text area (`.textarea`): 12px padding and radius, 128px tall to start. */
 function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
   return (
     <textarea
       data-slot="textarea"
       className={cn(
-        "flex field-sizing-content min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40",
+        "flex min-h-32 w-full rounded-md border border-input bg-card p-3 text-body text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive",
         className
       )}
       {...props}
@@ -14,4 +15,40 @@ function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
   )
 }
 
-export { Textarea }
+/**
+ * A text area with the design's "0 / 1000" counter under it, right-aligned and announced
+ * politely. The limit is `maxLength`, so the browser enforces it too.
+ */
+function TextareaWithCounter({
+  value,
+  maxLength,
+  className,
+  counterClassName,
+  ...props
+}: React.ComponentProps<"textarea"> & {
+  value: string
+  maxLength: number
+  counterClassName?: string
+}) {
+  const counterId = React.useId()
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Textarea
+        value={value}
+        maxLength={maxLength}
+        aria-describedby={counterId}
+        className={className}
+        {...props}
+      />
+      <span
+        id={counterId}
+        aria-live="polite"
+        className={cn("text-right text-caption font-medium text-muted-foreground", counterClassName)}
+      >
+        {value.length} / {maxLength}
+      </span>
+    </div>
+  )
+}
+
+export { Textarea, TextareaWithCounter }

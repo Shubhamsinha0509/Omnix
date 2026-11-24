@@ -45,7 +45,7 @@ export async function GET(request: Request) {
 
 /** Only our own workspace pages, so `returnTo` can't be used as an open redirect. */
 function safeReturnTo(value: string | null) {
-  return value && /^\/workspace(\/[\w\-/]*)?$/.test(value) ? value : "/workspace/connections";
+  return value && /^\/workspace(\/[\w\-/]*)?$/.test(value) ? value : "/workspace/integrations";
 }
 
 function fail(request: Request, returnTo: string, reason: string) {

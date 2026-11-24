@@ -1,6 +1,9 @@
 import { and, eq } from "drizzle-orm";
 
 import { agentTools, connections, db, type Agent } from "@/db";
+import { mcpToolDefinitions } from "@/lib/mcp/tools";
+import { serverForProvider } from "@/lib/mcp/servers";
+import { hasSandboxKey } from "@/lib/sandbox";
 import { TOOLS } from "./registry";
 import { isNativeTool, type AnyTool, type ToolRisk } from "./types";
 
@@ -23,10 +26,17 @@ export type ResolvedTool = {
 /**
  * A tool with no `provider` and `risk: "read"` is on unless the user turned it off; that
  * was the Phase 2 behaviour and existing agents keep it. Everything else — anything that
- * reaches a connected account, writes, or sends — starts off.
+ * reaches a connected account, writes, or sends — starts off. So does every VM tool, even
+ * the reading ones: using one starts a VM, which costs money, so it is the user's choice.
  */
 function defaultEnabled(tool: AnyTool) {
+  if (!isNativeTool(tool) && tool.runsIn === "sandbox") return false;
   return !("provider" in tool && tool.provider) && tool.risk === "read";
+}
+
+/** VM tools exist only when E2B is configured; without it they aren't offered or listed. */
+function available(tool: AnyTool) {
+  return isNativeTool(tool) || tool.runsIn !== "sandbox" || hasSandboxKey();
 }
 
 /**
@@ -97,16 +107,49 @@ async function defaultConnections(userId: number) {
 }
 
 /**
+ * Every tool this user has: the built-in ones, plus whatever their connected MCP servers
+ * are currently offering (Phase 5).
+ *
+ * Built-in tools are a constant; MCP tools are not — they belong to a user's accounts and
+ * are whatever each server last said it had. That is why this is a function of the user
+ * rather than a module-level map, and why it reads the tool cache instead of the network:
+ * `resolveAgentTools` runs before every single agent turn (`lib/mcp/tools.ts`).
+ */
+async function toolsForUser(userId: number): Promise<AnyTool[]> {
+  const rows = await db
+    .select({ id: connections.id, provider: connections.provider, kind: connections.kind })
+    .from(connections)
+    .where(and(eq(connections.userId, userId), eq(connections.status, "active")))
+    .orderBy(connections.createdAt);
+
+  const mcpConnections = rows.filter(
+    // An allow-list check, not just a column check: a row naming a server we have since
+    // removed from `MCP_SERVERS` offers no tools at all (D49).
+    (row) => row.kind === "mcp" && serverForProvider(row.provider) !== undefined,
+  );
+
+  const perConnection = await Promise.all(
+    mcpConnections.map((row) => mcpToolDefinitions({ id: row.id, provider: row.provider })),
+  );
+
+  return [...Object.values(TOOLS).filter(available), ...perConnection.flat()];
+}
+
+/**
  * The tools to offer the model for this run.
  *
  * A tool that needs an account it hasn't got is left out entirely rather than offered and
  * failed: a model told it can read email, which then can't, wastes a turn apologising.
  */
 export async function resolveAgentTools(agent: Agent): Promise<ResolvedTool[]> {
-  const [grants, fallbacks] = await Promise.all([loadGrants(agent.id), defaultConnections(agent.userId)]);
+  const [grants, fallbacks, tools] = await Promise.all([
+    loadGrants(agent.id),
+    defaultConnections(agent.userId),
+    toolsForUser(agent.userId),
+  ]);
   const resolved: ResolvedTool[] = [];
 
-  for (const tool of Object.values(TOOLS)) {
+  for (const tool of tools) {
     const grant = grants.get(tool.key);
     if (!(grant ? grant.enabled : defaultEnabled(tool))) continue;
 
@@ -141,6 +184,12 @@ export type ToolSetting = {
   summary: string;
   risk: ToolRisk;
   provider: string | null;
+  /**
+   * The provider's name for the UI: "Gmail", "Notion". The settings page groups by
+   * provider and an MCP provider is `mcp:notion`, which is not a heading anyone wants to
+   * read — and the page is a client component, so it can't look the server up itself.
+   */
+  providerName: string | null;
   enabled: boolean;
   /** The chosen account, or null for "use my connected account". */
   connectionId: string | null;
@@ -156,9 +205,13 @@ export type ToolSetting = {
  * that can't be used yet, so the page can say *why* rather than just omitting them.
  */
 export async function listToolSettings(agent: Agent): Promise<ToolSetting[]> {
-  const [grants, fallbacks] = await Promise.all([loadGrants(agent.id), defaultConnections(agent.userId)]);
+  const [grants, fallbacks, tools] = await Promise.all([
+    loadGrants(agent.id),
+    defaultConnections(agent.userId),
+    toolsForUser(agent.userId),
+  ]);
 
-  return Object.values(TOOLS).map((tool) => {
+  return tools.map((tool) => {
     const grant = grants.get(tool.key);
     const provider = (isNativeTool(tool) ? undefined : tool.provider) ?? null;
     const chosen =
@@ -168,9 +221,10 @@ export async function listToolSettings(agent: Agent): Promise<ToolSetting[]> {
     return {
       key: tool.key,
       label: tool.label,
-      summary: TOOL_SUMMARIES[tool.key] ?? tool.label,
+      summary: ("summary" in tool && tool.summary) || TOOL_SUMMARIES[tool.key] || tool.label,
       risk: tool.risk,
       provider,
+      providerName: providerName(provider),
       enabled: grant ? grant.enabled : defaultEnabled(tool),
       connectionId: chosen,
       approval: effectiveApproval(tool.risk, grant?.approval),
@@ -178,6 +232,12 @@ export async function listToolSettings(agent: Agent): Promise<ToolSetting[]> {
       needsConnection: Boolean(provider) && !hasAccount,
     };
   });
+}
+
+/** What to call a provider in the UI. */
+function providerName(provider: string | null) {
+  if (!provider) return null;
+  return serverForProvider(provider)?.name ?? (provider === "gmail" ? "Gmail" : provider);
 }
 
 /**
@@ -192,4 +252,10 @@ const TOOL_SUMMARIES: Record<string, string> = {
   "gmail.read": "Read one message in full, including attachment names.",
   "gmail.create_draft": "Save a draft in your Drafts folder. Nothing is sent.",
   "gmail.send": "Send an email from your account. This can't be taken back.",
+  "sandbox.run_code": "Run Python or Bash in this agent's VM. Starts the VM if it's off.",
+  "sandbox.write_file": "Save files in this agent's VM.",
+  "sandbox.read_file": "Read files from this agent's VM.",
+  "sandbox.list_files": "See what's in this agent's VM.",
+  "sandbox.share_file": "Hand you files from the VM (CSV, charts) as downloads.",
+  "sandbox.open_browser": "Open pages in the VM's browser, on the live screen.",
 };

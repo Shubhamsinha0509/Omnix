@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="7 3 50 50" fill="none">
+  <defs>
+    <linearGradient id="omnix-ghost" x1="31" y1="16" x2="31" y2="45" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8f80fa"/>
+      <stop offset="1" stop-color="#5a4be8"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(1 0)">
+    <!-- the ring, back half (behind the ghost) -->
+    <ellipse cx="30" cy="39" rx="22" ry="6" transform="rotate(-8 30 39)" stroke="#cfcafb" stroke-width="2.5"/>
+    <!-- the ghost -->
+    <path d="M20 28C20 20.5 24.5 16 30 16S40 20.5 40 28V45l-3.33-3-3.34 3-3.33-3-3.33 3-3.34-3L20 45Z" fill="url(#omnix-ghost)"/>
+    <ellipse cx="26.6" cy="30" rx="1.9" ry="2.9" fill="#fff"/>
+    <ellipse cx="33.4" cy="30" rx="1.9" ry="2.9" fill="#fff"/>
+    <!-- the ring, front half (over the ghost) -->
+    <path d="M8 39A22 6 0 0 0 52 39" transform="rotate(-8 30 39)" stroke="#cfcafb" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- sparkle and dots -->
+    <path d="M48 7.5Q49 12.8 54.5 14Q49 15.2 48 20.5Q47 15.2 41.5 14Q47 12.8 48 7.5Z" fill="#6656ee"/>
+    <circle cx="12" cy="19" r="1.3" fill="#b9b2f7"/>
+    <circle cx="51" cy="29" r="1.3" fill="#b9b2f7"/>
+  </g>
+</svg>

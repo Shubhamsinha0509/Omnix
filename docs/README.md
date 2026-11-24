@@ -151,6 +151,39 @@ security assessment (CASA) — weeks and real money. Read Google's current requi
 early; they gate launch, not development. See
 [security](07-security.md#google-verification).
 
+## Connecting Notion and Jira
+
+Nothing to configure. Both run official remote MCP servers that register Omnix
+themselves the first time anyone connects them (D48), so this works on a fresh checkout:
+
+1. `TOKEN_ENCRYPTION_KEY` must be set — same requirement as Gmail, and for the same
+   reason: without it there is nowhere safe to put the token.
+2. **Integrations** in the sidebar → **Connect** on Notion or Jira → approve on their
+   consent screen. You come back to the page, which says how many tools the server gave.
+3. Open an agent → **Settings → Tools** → switch on the ones you want. Every tool from a
+   connected app starts **off**, and anything we haven't reviewed as read-only asks before
+   it runs (D10, D49).
+
+What each server offers is its own business, so the tool list is read from the server and
+cached: it refreshes hourly, when you connect, and when you press **Refresh tools** on the
+tile. An agent run never waits on their server to find out what it can do.
+
+### Slack needs an app first
+
+Slack is the exception. Its MCP server has no dynamic registration and allows **only** an
+app published in the Slack Marketplace, or a workspace's own internal app — an unlisted
+app is prohibited, and a workspace admin has to approve it either way (D48,
+[integrations](05-integrations.md#the-one-constraint-that-changes-the-plan-slack)). So
+until there is such an app:
+
+```bash
+SLACK_CLIENT_ID=...
+SLACK_CLIENT_SECRET=...
+```
+
+With those unset the Slack tile is visibly disabled and says why, rather than sending
+anyone to a consent screen that would refuse them.
+
 ## Running tasks locally
 
 Tasks are Inngest functions, and Inngest is what calls them. In development that means a

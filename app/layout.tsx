@@ -1,7 +1,10 @@
-import { AuthProvider } from "@/components/session-provider";
 import "./globals.css";
 import type { Metadata } from "next";
-import { Figtree } from "next/font/google";
+import { Bricolage_Grotesque, Figtree, JetBrains_Mono } from "next/font/google";
+
+import { AuthProvider } from "@/components/session-provider";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "Omnix — AI agents that work for you",
@@ -9,17 +12,39 @@ export const metadata: Metadata = {
     "Create AI agents, connect them to Gmail, Slack, Notion and Jira, and let them work on demand, on a schedule, or on their own virtual machine.",
 };
 
-const figtree = Figtree({ subsets: ["latin"] });
+// The names match the tokens in globals.css: --font-sans, --font-display, --font-mono.
+const figtree = Figtree({ subsets: ["latin"], variable: "--font-figtree", display: "swap" });
+// The optical-size axis, as the reference loads it (opsz 12..96): headings set at 28–40px
+// get the narrower cut meant for those sizes instead of the display one.
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-bricolage",
+  display: "swap",
+  axes: ["opsz"],
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={figtree.className} style={{ margin: 0, padding: 0 }}>
-        <AuthProvider>{children}</AuthProvider>
+    // next-themes sets the class on <html> before React hydrates, hence the warning opt-out.
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${figtree.variable} ${bricolage.variable} ${jetbrainsMono.variable}`}
+    >
+      {/* 14/22 body text, as every reference screen sets on its root. */}
+      <body className="text-body">
+
+        <ThemeProvider>
+          <AuthProvider>
+            {/* toast.add({ title, type }) from anywhere (components/ui/toast). */}
+            <Toaster>{children}</Toaster>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

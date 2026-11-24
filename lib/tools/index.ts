@@ -9,4 +9,4 @@
 export * from "./types";
 export * from "./registry";
 export * from "./selection";
-export { validateArgs } from "./schema";
+export { checkToolArgs, validateArgs, validateOpenArgs } from "./schema";

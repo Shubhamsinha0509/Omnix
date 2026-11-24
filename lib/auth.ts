@@ -3,7 +3,7 @@ import type { AuthOptions } from "next-auth";
 import { getServerSession } from "next-auth";
 import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db, users } from "@/db";
 
@@ -35,7 +35,8 @@ export const authOptions: AuthOptions = {
           .values({ email: user.email, name: user.name, image: user.image })
           .onConflictDoUpdate({
             target: users.email,
-            set: { name: user.name, image: user.image },
+            // Keep a name the user set in Settings; only fill it in when there is none.
+            set: { name: sql`coalesce(${users.name}, excluded.name)`, image: user.image },
           });
         return true;
       } catch (error) {

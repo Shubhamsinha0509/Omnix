@@ -116,7 +116,11 @@ learns what it did from the `url_citation` annotations and
 
 If the provider refuses a server tool, the run doesn't die with it: see D25.
 
-- Tools come from two sources: **built-in** (defined in code, e.g. Gmail, web, sandbox) and **MCP** (loaded from the user's connected, allow-listed MCP servers and wrapped in the same `ToolDefinition` shape, with `risk: "write"` unless we've reviewed the tool as read-only).
+- Tools come from two sources: **built-in** (defined in code, e.g. Gmail, web, sandbox) and **MCP** — **built** in Phase 5: a connected server's own `tools/list`, wrapped in the same `ToolDefinition` shape by `lib/mcp/tools.ts`, with `risk: "write"` unless we have reviewed that tool as read-only (D49). Three things follow from a tool not being ours:
+  - Its `inputSchema` is passed to the model **unchanged** (`openParameters`) and its arguments are checked loosely, because `validateArgs` drops properties it doesn't recognise and a nested filter object quietly disappearing would mean sending the server a different call than the one the model wrote — and than the approval card showed.
+  - Its description is attributed ("From the Notion MCP server, which describes it as…") and truncated, because a tool description is a stranger's text that reaches the model looking like ours. That is what "tool poisoning" means, and the allow-list plus approvals are what actually defend against it.
+  - Its result is always `untrustedOutput`.
+- Which tools exist is therefore a function of the **user**, not a constant: `resolveAgentTools` reads the built-in registry plus the cached tool list of every connected MCP account (`lib/tools/selection.ts`). It reads the cache, never the network — a run must not wait on a third party to find out what it can do.
 - `ctx` carries the user, agent, run id, timezone, an abort signal, and `auth` — the right connection, which decrypts and refreshes its token only when the tool asks for one. Nothing in `ctx` is ever shown to the model.
 - **Default approval rule:** `read` → no approval; `write` → approval unless the user turns it off for that agent and tool; `destructive` → always, with no off switch (D29).
 
@@ -129,7 +133,8 @@ If the provider refuses a server tool, the run doesn't die with it: see D25.
 | `gmail.search`, `gmail.read` | read | 3 — **built** |
 | `gmail.create_draft` | write | 3 — **built** |
 | `gmail.send` | write (approval) | 3 — **built** |
-| Slack, Notion, Jira tools (from their MCP servers) | mixed — approval by default | 5 |
+| Notion and Jira tools (from their MCP servers) | mixed — approval by default | 5 — **built**, not yet called live |
+| Slack tools (from its MCP server) | mixed — approval by default | 5 — built, blocked on a Slack app (D48) |
 | `sandbox.run_code`, `sandbox.browser`, `sandbox.files` | write | 6 |
 
 ## Triggers

@@ -73,11 +73,33 @@ export type ToolDefinition = {
   /** Written for the model: what it does and when to use it. */
   description: string;
   risk: ToolRisk;
+  /**
+   * One line for the user, where `description` (written for the model) reads badly as UI.
+   * Built-in tools get theirs from `TOOL_SUMMARIES`; an MCP tool brings its own, because
+   * there are hundreds of them and none is ours to write.
+   */
+  summary?: string;
   /** Needs a connection of this type (Phase 3), e.g. "gmail". */
   provider?: string;
   /** Where the tool's code runs. `sandbox` tools need the agent's VM (Phase 6). */
   runsIn: "server" | "sandbox";
+  /**
+   * How long one call may take, when the runner's default (`LIMITS.toolTimeoutMs`) is too
+   * short — VM tools may have to start the VM first, which alone takes ~10 s.
+   */
+  timeoutMs?: number;
   parameters: JsonSchema;
+  /**
+   * The parameter schema exactly as its source published it, for tools whose schema is
+   * not ours to write — an MCP server's (Phase 5).
+   *
+   * When present this is what the model is shown, and the arguments it writes are checked
+   * loosely rather than against `parameters`. Both halves matter: a server's schema can
+   * use nested objects and unions that `JsonSchema` can't express, and `validateArgs`
+   * *drops* properties it doesn't recognise — so squeezing one into the subset would mean
+   * quietly sending a remote server a call with arguments missing.
+   */
+  openParameters?: Record<string, unknown>;
   /**
    * True when the result contains text written by strangers (web pages, emails).
    * The runner labels it as untrusted data so the model doesn't follow instructions in it.

@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 
   // Without a valid state we don't even know where the user meant to end up.
   if (!verified || verified.provider !== "gmail" || verified.userId !== user.id) {
-    return done(request, "/workspace/connections", { error: "state_mismatch" });
+    return done(request, "/workspace/integrations", { error: "state_mismatch" });
   }
   const returnTo = verified.returnTo;
 

@@ -1,19 +1,34 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
-import Link from "next/link";
-import { CalendarClock, Check, Loader2, Plug, Settings, SlidersHorizontal, X } from "lucide-react";
+import {
+  CalendarClock,
+  Check,
+  Cpu,
+  History,
+  Loader2,
+  Lock,
+  Plug,
+  Settings,
+  SlidersVertical,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { updateAgent } from "@/app/workspace/actions";
+import { ModelChip } from "@/components/custom/design/Chips";
+import { updateAgent, updateAgentTool } from "@/app/workspace/actions";
 import type { SafeConnection } from "@/lib/integrations/connections";
+import { MOCK_AGENT_SETTINGS } from "@/lib/mock-data";
 import type { TaskView } from "@/lib/tasks";
 import type { ToolSetting } from "@/lib/tools";
-import AgentTasks from "./AgentTasks";
+import { AgentSchedule } from "./AgentSchedule";
 import AgentTools from "./AgentTools";
 import { AgentFields, type AgentDraft } from "./AgentFields";
 import { DeleteAgent } from "./DeleteAgent";
+import { vmStateOf } from "@/lib/vm-state";
+import { VmSettingRow } from "./VmSetting";
 
 export type AgentConfig = {
   /** Every tool there is, with this agent's current choice for each. */
@@ -24,24 +39,93 @@ export type AgentConfig = {
   conversationCount: number;
   /** What this agent does on its own, for the Schedule tab. */
   tasks: TaskView[];
+  /** The model every agent runs on (lib/ai.ts), shown in Settings. */
+  model: { id: string; label: string };
 };
+
+export type ConfigTab = "instructions" | "tools" | "schedule" | "settings";
 
 type Props = AgentConfig & {
   agent: { id: string; name: string; instructions: string; avatarSeed: string };
+  tab: ConfigTab;
+  onTabChange: (tab: ConfigTab) => void;
   onClose: () => void;
 };
 
 const TABS = [
-  { value: "general", label: "General", icon: SlidersHorizontal },
+  { value: "instructions", label: "Instructions", icon: SlidersVertical },
   { value: "tools", label: "Tools", icon: Plug },
   { value: "schedule", label: "Schedule", icon: CalendarClock },
   { value: "settings", label: "Settings", icon: Settings },
 ] as const;
 
+/** One row of the Settings tab list (`.lrow`): icon, name and note, control. */
+function SettingRow({
+  icon: Icon,
+  title,
+  note,
+  children,
+}: {
+  icon: typeof Cpu;
+  title: string;
+  note: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-[52px] items-center gap-3 px-4 py-3">
+      <Icon className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="font-medium">{title}</span>
+        <span className="text-body-s text-muted-foreground">{note}</span>
+      </span>
+      {children}
+    </div>
+  );
+}
+
 /**
- * Agent configuration beside the chat, so an agent can be tuned without leaving the
- * conversation: profile, tools, tasks and deletion. Built from the same pieces as the
- * agent's own pages, so there is one of each control rather than two that can disagree.
+ * "Ask before writing": one switch over every write tool whose approval can be changed.
+ * On means each of them asks first (the default); a tool that always asks stays asking.
+ */
+function AskBeforeWriting({ agentId, tools }: { agentId: string; tools: ToolSetting[] }) {
+  // VM tools have their own switch under Isolated VM ("Run code without asking").
+  const writes = tools.filter(
+    (tool) => tool.risk !== "read" && tool.approvalEditable && !tool.key.startsWith("sandbox."),
+  );
+  const [on, setOn] = useState(writes.every((tool) => tool.approval === "always"));
+  const [busy, startSaving] = useTransition();
+
+  const change = (next: boolean) => {
+    const before = on;
+    setOn(next);
+    startSaving(async () => {
+      const results = await Promise.all(
+        writes.map((tool) =>
+          updateAgentTool(agentId, {
+            tool: tool.key,
+            enabled: tool.enabled,
+            connectionId: tool.connectionId,
+            approval: next ? "always" : "never",
+          }),
+        ),
+      );
+      if (results.some((result) => result?.error)) setOn(before);
+    });
+  };
+
+  return (
+    <Switch
+      checked={writes.length === 0 ? true : on}
+      disabled={writes.length === 0 || busy}
+      onCheckedChange={(checked) => change(Boolean(checked))}
+      aria-label="Ask before writing"
+    />
+  );
+}
+
+/**
+ * The configuration drawer beside the chat (07–10-chat-config-*): instructions, tools,
+ * schedule and settings, so an agent can be tuned without leaving the conversation.
  */
 export default function AgentConfigPanel({
   agent,
@@ -49,6 +133,9 @@ export default function AgentConfigPanel({
   connections,
   conversationCount,
   tasks,
+  model,
+  tab,
+  onTabChange,
   onClose,
 }: Props) {
   const [draft, setDraft] = useState<AgentDraft>({
@@ -59,6 +146,14 @@ export default function AgentConfigPanel({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isSaving, startSaving] = useTransition();
+
+  const vm = vmStateOf(tools);
+  /**
+   * Changes whenever the saved tool settings do. The Tools tab and the VM row keep their
+   * own working copy, so they start over from the server's when this changes (the VM
+   * switch changes several tools at once).
+   */
+  const toolsKey = tools.map((tool) => `${tool.key}:${tool.enabled}:${tool.approval}`).join("|");
 
   const changed =
     draft.name !== agent.name ||
@@ -78,74 +173,95 @@ export default function AgentConfigPanel({
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b px-5 py-3">
-        <h2 className="font-semibold">Agent configuration</h2>
-        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close configuration">
+    <div className="flex h-full min-h-0 flex-col gap-5">
+      <div className="flex items-center gap-3">
+        <h2 className="flex-1 text-h2 font-semibold">Agent configuration</h2>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          aria-label="Close configuration"
+          className="[&_svg:not([class*='size-'])]:size-5"
+        >
           <X />
         </Button>
-      </header>
+      </div>
 
-      <Tabs defaultValue="general" className="flex min-h-0 flex-1 flex-col gap-0">
-        <div className="px-5 pt-4">
-          <TabsList className="grid h-10! w-full grid-cols-4">
-            {TABS.map(({ value, label, icon: Icon }) => (
-              <TabsTrigger key={value} value={value} aria-label={label} title={label} className="h-full">
-                <Icon />
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => onTabChange(value as ConfigTab)}
+        className="flex min-h-0 flex-1 flex-col gap-5"
+      >
+        <TabsList variant="icon">
+          {TABS.map(({ value, label, icon: Icon }) => (
+            <TabsTrigger key={value} value={value}>
+              <Icon />
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-          {/* General: who the agent is */}
-          <TabsContent value="general">
-            <form onSubmit={save} className="flex flex-col gap-5">
-              <AgentFields draft={draft} onChange={(next) => { setDraft(next); setSaved(false); }} disabled={isSaving} />
-
+        <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pb-1">
+          <TabsContent value="instructions">
+            <form onSubmit={save} className="flex flex-col gap-4">
+              <AgentFields
+                draft={draft}
+                showHint
+                disabled={isSaving}
+                onChange={(next) => {
+                  setDraft(next);
+                  setSaved(false);
+                }}
+              />
               {error && (
-                <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-body-s text-destructive">
                   {error}
                 </p>
               )}
-
-              <Button type="submit" size="lg" className="w-full" disabled={!draft.name.trim() || !changed || isSaving}>
+              <Button type="submit" className="w-full" disabled={!draft.name.trim() || !changed || isSaving}>
                 {isSaving ? <Loader2 className="animate-spin" /> : saved && !changed ? <Check /> : null}
-                {isSaving ? "Saving..." : saved && !changed ? "Saved" : "Save changes"}
+                {isSaving ? "Saving…" : saved && !changed ? "Saved" : "Save changes"}
               </Button>
             </form>
           </TabsContent>
 
-          {/* Tools: what the agent may do, saved as each switch changes */}
           <TabsContent value="tools">
-            <AgentTools agentId={agent.id} tools={tools} connections={connections} />
+            <AgentTools
+              key={toolsKey}
+              agentId={agent.id}
+              agentName={agent.name}
+              tools={tools}
+              connections={connections}
+            />
           </TabsContent>
 
-          {/* Schedule: what the agent does on its own, without leaving the chat */}
-          <TabsContent value="schedule" className="flex flex-col gap-4">
-            <AgentTasks agentId={agent.id} agentName={agent.name} tasks={tasks} compact />
-            <p className="text-sm text-muted-foreground">
-              Prefer more room?{" "}
-              <Link href={`/workspace/agent/${agent.id}/tasks`} className="underline underline-offset-4">
-                Open Tasks on its own page
-              </Link>
-              , where you can also see{" "}
-              <Link href={`/workspace/agent/${agent.id}/runs`} className="underline underline-offset-4">
-                every run
-              </Link>
-              .
-            </p>
+          <TabsContent value="schedule">
+            <AgentSchedule agentId={agent.id} agentName={agent.name} tasks={tasks} vm={vm} />
           </TabsContent>
 
-          {/* Settings: everything else, including deletion */}
-          <TabsContent value="settings" className="flex flex-col gap-5">
-            <p className="text-sm text-muted-foreground">
-              Prefer more room? Open these settings{" "}
-              <Link href={`/workspace/agent/${agent.id}/settings`} className="underline underline-offset-4">
-                on their own page
-              </Link>
-              .
-            </p>
+          <TabsContent value="settings" className="flex flex-col gap-4">
+            <div className="divide-y rounded-lg border bg-card">
+              <SettingRow icon={Cpu} title="Model" note="Set for the whole workspace.">
+                <span title={model.id}>
+                  <ModelChip label={model.label} dot={false} className="text-body-s" />
+                </span>
+              </SettingRow>
+              <SettingRow icon={Lock} title="Ask before writing" note="Confirm each send, post or edit.">
+                <AskBeforeWriting agentId={agent.id} tools={tools} />
+              </SettingRow>
+              <VmSettingRow key={toolsKey} agentId={agent.id} agentName={agent.name} vm={vm} />
+              <SettingRow
+                icon={History}
+                title="Remember past chats"
+                note={`Uses earlier chats with ${agent.name} as context.`}
+              >
+                <Switch
+                  checked={MOCK_AGENT_SETTINGS.rememberPastChats}
+                  disabled
+                  aria-label="Remember past chats (coming soon)"
+                />
+              </SettingRow>
+            </div>
             <DeleteAgent agent={agent} conversationCount={conversationCount} />
           </TabsContent>
         </div>
