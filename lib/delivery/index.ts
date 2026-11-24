@@ -90,7 +90,10 @@ function buildBody(input: DeliverInput) {
   const parts: string[] = [];
   if (input.reply.trim()) parts.push(input.reply.trim());
   if (!input.ok) parts.push(input.error?.trim() || "The run didn't finish and the agent gave no reply.");
-  for (const note of input.notes ?? []) if (note.trim()) parts.push(note.trim());
+  // A failed run often notes the same thing it failed with; say it once.
+  for (const note of input.notes ?? []) {
+    if (note.trim() && !parts.includes(note.trim())) parts.push(note.trim());
+  }
   return parts.join("\n\n") || "The run finished without a reply.";
 }
 

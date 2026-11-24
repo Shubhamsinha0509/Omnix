@@ -66,7 +66,7 @@ type PromptOptions = {
    * Set when the agent has its VM tools on (Phase 6): adds how to use the VM well. `task`
    * is the scheduled task this run is for, which gets a folder of its own there.
    */
-  vm?: { canShare: boolean; task: { id: string; name: string } | null };
+  vm?: { canShare: boolean; maxSteps: number; task: { id: string; name: string } | null };
 };
 
 /**
@@ -94,6 +94,7 @@ function vmRules(vm: NonNullable<PromptOptions["vm"]>) {
     "- Use it for anything that must be exact rather than guessed: calculations, counting, sorting and filtering data, parsing files or API responses, and checking code you wrote by running it.",
     "- It has python3 (standard library; the requests package is not installed, so use urllib.request or pip install first) and bash. There is no Node.js.",
     "- Your VM tools are tool calls you make. They are not commands that exist inside the VM.",
+    `- You have at most ${vm.maxSteps} turns in this run (each time you call tools is one turn). So do the work in one or two programs: fetch, filter, compare with what you saved last time, and save the results in the same program, instead of printing the data and inspecting it a little at a time. Print only short summaries.`,
   ];
   if (vm.task) {
     const folder = taskFolder(vm.task);

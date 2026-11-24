@@ -37,8 +37,14 @@ import {
  * bill. See docs/04-agent-runtime.md.
  */
 export const LIMITS = {
-  /** Model turns in one run. Each turn may call several tools. */
+  /** Model turns in one chat run. Each turn may call several tools. */
   maxIterations: 15,
+  /**
+   * Model turns in one background run (a scheduled task or Run now). More than chat:
+   * nobody is waiting on it, and a task that works in its VM (fetch, filter, compare with
+   * last time, save, share) needs room to finish. The tool-call cap still applies.
+   */
+  maxBackgroundIterations: 25,
   /** Tool calls in one run, across all turns. */
   maxToolCalls: 30,
   /** How long a single tool may take. */
@@ -146,6 +152,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunOutcome> {
   const durability = options.durability ?? immediate;
 
   const tools = await resolveAgentTools(agent);
+  const maxIterations = trigger === "chat" ? LIMITS.maxIterations : LIMITS.maxBackgroundIterations;
 
   // Opening the run is itself a step, so a background run that is picked up again
   // continues the run it started instead of opening a second one. `startedAt` comes back
@@ -172,6 +179,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunOutcome> {
         // How to use the VM, only for an agent that has its VM tools on.
         vm: tools.some(({ tool }) => !isNativeTool(tool) && tool.runsIn === "sandbox")
           ? {
+              maxSteps: maxIterations,
               canShare: tools.some(({ tool }) => tool.key === "sandbox.share_file"),
               task:
                 options.taskId && options.taskName ? { id: options.taskId, name: options.taskName } : null,
@@ -196,6 +204,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunOutcome> {
     awaitApproval: options.awaitApproval,
     log: stepLogger(started.runId, 0, durability.memoised),
     spent: { iteration: 0, toolCalls: 0, inputTokens: 0, outputTokens: 0 },
+    maxIterations,
   });
 }
 
@@ -282,6 +291,8 @@ export async function resumeAgent(options: ResumeAgentOptions): Promise<ResumeRe
         inputTokens: resume.inputTokens,
         outputTokens: resume.outputTokens,
       },
+      // Only chat turns resume here; background runs wait in place instead.
+      maxIterations: LIMITS.maxIterations,
     }),
   };
 }
@@ -301,6 +312,8 @@ type DriveOptions = {
   emit: (event: RunEvent) => void;
   log: StepLogger;
   spent: Spent;
+  /** Model turns this run may take: `LIMITS.maxIterations`, or more for a background run. */
+  maxIterations: number;
   /** Chat runs everything now; a background run wraps each piece in a durable step (D41). */
   durability: Durability;
   /** Set for a background run, which waits for an approval instead of stopping (D41). */
@@ -376,7 +389,7 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
   }
 
   try {
-    for (let iteration = options.spent.iteration + 1; iteration <= LIMITS.maxIterations; iteration++) {
+    for (let iteration = options.spent.iteration + 1; iteration <= options.maxIterations; iteration++) {
       /**
        * One model turn, as one durable step: the call to the provider and the log of
        * what it said. They go together because a retry must not write the step twice,
@@ -572,11 +585,11 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
         note(stopAfterTools);
         break;
       }
-      if (iteration === LIMITS.maxIterations) {
+      if (iteration === options.maxIterations) {
         await durability.step("limit-iterations", () =>
-          log("error", null, { reason: "max_iterations", limit: LIMITS.maxIterations }),
+          log("error", null, { reason: "max_iterations", limit: options.maxIterations }),
         );
-        note(`I stopped after ${LIMITS.maxIterations} steps without finishing. Try asking in smaller pieces.`);
+        note(`I stopped after ${options.maxIterations} steps without finishing. Try asking in smaller pieces.`);
       }
     }
 
