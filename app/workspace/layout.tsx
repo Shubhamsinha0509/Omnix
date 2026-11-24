@@ -6,7 +6,8 @@ import { MobileTopBar } from "@/components/custom/shell/MobileTopBar";
 import { SearchCommand } from "@/components/custom/shell/SearchCommand";
 import { agents, db } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
-import { MOCK_PLAN } from "@/lib/mock-data";
+import { MOCK_CURRENT_PLAN_ID } from "@/lib/mock-data";
+import { getPlan } from "@/lib/pricing";
 import { getMonthlyUsage } from "@/lib/usage";
 import { countUnread } from "@/lib/notifications";
 
@@ -31,6 +32,8 @@ const WorkspaceLayout = async ({ children }: { children: React.ReactNode }) => {
       ])
     : [[], 0, null];
 
+  const plan = getPlan(MOCK_CURRENT_PLAN_ID);
+
   const shell = {
     agents: userAgents,
     unread,
@@ -38,10 +41,13 @@ const WorkspaceLayout = async ({ children }: { children: React.ReactNode }) => {
       name: user?.name?.trim() || user?.email?.split("@")[0] || "Guest",
       email: user?.email ?? "",
       image: user?.image ?? null,
-      plan: MOCK_PLAN.name,
+      plan: plan.name,
     },
-    // This month's real tokens against the plan's (mock) allowance.
-    tokensUsedPercent: Math.min(100, Math.round(((usage?.tokens ?? 0) / MOCK_PLAN.tokensPerMonth) * 100)),
+    // This month's real tokens against the plan's allowance (lib/pricing.ts).
+    tokensUsedPercent: Math.min(
+      100,
+      Math.round(((usage?.tokens ?? 0) / plan.allowances.tokensPerMonth) * 100),
+    ),
   };
 
   return (
