@@ -185,7 +185,8 @@ back, but the fallback has only been exercised as far as the auth wall.
 - [ ] Spike: confirm E2B covers browser, network allow-lists, pause/resume and pricing for our needs (API confirmed from E2B's docs and SDK types; allow-lists and pricing still open)
 - [x] `sandboxes` table; E2B create / pause / resume / destroy lifecycle (`lib/sandbox`, D50). Verified live against E2B on 2026-11-24 (`npm run verify:vm -- --live`, 20 checks: start in ~8.5 s, one VM for two clicks, pause and resume keep files, stop deletes it)
 - [x] Tools: `sandbox.run_code` (python, bash), `sandbox.write_file` / `read_file` / `list_files`, `sandbox.open_browser` (D52). Off by default; switched on per agent in the Tools tab. Verified live by calling each tool against a real VM, and in a real chat on 2026-11-24 (cody wrote Python, asked for approval, ran it and read its result file back). Code runs are also shown in a terminal window on the VM's screen
-- [ ] Runtime toggle in agent settings; VM status indicator (status, Start / Pause / Resume / Stop and the live screen are built in the chat's run panel, `VmCard`, and checked in the app on 2026-11-24; the settings toggle is still mock)
+- [x] Runtime toggle in agent settings; VM status indicator. The Isolated VM switch in Settings turns all VM tools on or off, with "Run code without asking" (D53); status and controls are in the chat's run panel (`VmCard`). Checked in the app on 2026-11-24
+- [x] VM know-how in the system prompt, a folder per scheduled task, and a warning on tasks that would wait for approval (D53). Not yet exercised by a model: the free OpenRouter quota ran out
 - [ ] VM usage tracked per run
 
 ## Phase 7 — Ready to launch

@@ -39,7 +39,7 @@ All 20 screens are built. What is real and what is mock (everything mock is in
 | Screen | Mock parts |
 | --- | --- |
 | Shell | plan name ("Free plan"); token usage is real, the 100K allowance is `MOCK_PLAN` |
-| Chat drawer → Settings | Isolated VM, Remember past chats (`MOCK_AGENT_SETTINGS`, disabled) |
+| Chat drawer → Settings | Remember past chats (`MOCK_AGENT_SETTINGS`, disabled). Isolated VM is real (22, `VmSettingRow`) |
 | Chat drawer → Schedule | "Once" (disabled: one-off runs need backend) |
 | Create agent | File analysis, Code execution, Multi-modal, Custom tools (coming soon) |
 | Live run | Pause, Stop, steering (disabled) |

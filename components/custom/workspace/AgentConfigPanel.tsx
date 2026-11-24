@@ -10,7 +10,6 @@ import {
   Lock,
   Plug,
   Settings,
-  ShieldCheck,
   SlidersVertical,
   X,
 } from "lucide-react";
@@ -28,6 +27,8 @@ import { AgentSchedule } from "./AgentSchedule";
 import AgentTools from "./AgentTools";
 import { AgentFields, type AgentDraft } from "./AgentFields";
 import { DeleteAgent } from "./DeleteAgent";
+import { vmStateOf } from "@/lib/vm-state";
+import { VmSettingRow } from "./VmSetting";
 
 export type AgentConfig = {
   /** Every tool there is, with this agent's current choice for each. */
@@ -87,7 +88,10 @@ function SettingRow({
  * On means each of them asks first (the default); a tool that always asks stays asking.
  */
 function AskBeforeWriting({ agentId, tools }: { agentId: string; tools: ToolSetting[] }) {
-  const writes = tools.filter((tool) => tool.risk !== "read" && tool.approvalEditable);
+  // VM tools have their own switch under Isolated VM ("Run code without asking").
+  const writes = tools.filter(
+    (tool) => tool.risk !== "read" && tool.approvalEditable && !tool.key.startsWith("sandbox."),
+  );
   const [on, setOn] = useState(writes.every((tool) => tool.approval === "always"));
   const [busy, startSaving] = useTransition();
 
@@ -142,6 +146,14 @@ export default function AgentConfigPanel({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isSaving, startSaving] = useTransition();
+
+  const vm = vmStateOf(tools);
+  /**
+   * Changes whenever the saved tool settings do. The Tools tab and the VM row keep their
+   * own working copy, so they start over from the server's when this changes (the VM
+   * switch changes several tools at once).
+   */
+  const toolsKey = tools.map((tool) => `${tool.key}:${tool.enabled}:${tool.approval}`).join("|");
 
   const changed =
     draft.name !== agent.name ||
@@ -214,11 +226,17 @@ export default function AgentConfigPanel({
           </TabsContent>
 
           <TabsContent value="tools">
-            <AgentTools agentId={agent.id} agentName={agent.name} tools={tools} connections={connections} />
+            <AgentTools
+              key={toolsKey}
+              agentId={agent.id}
+              agentName={agent.name}
+              tools={tools}
+              connections={connections}
+            />
           </TabsContent>
 
           <TabsContent value="schedule">
-            <AgentSchedule agentId={agent.id} agentName={agent.name} tasks={tasks} />
+            <AgentSchedule agentId={agent.id} agentName={agent.name} tasks={tasks} vm={vm} />
           </TabsContent>
 
           <TabsContent value="settings" className="flex flex-col gap-4">
@@ -231,10 +249,7 @@ export default function AgentConfigPanel({
               <SettingRow icon={Lock} title="Ask before writing" note="Confirm each send, post or edit.">
                 <AskBeforeWriting agentId={agent.id} tools={tools} />
               </SettingRow>
-              {/* TODO(backend): see MOCK_AGENT_SETTINGS in lib/mock-data.ts. */}
-              <SettingRow icon={ShieldCheck} title="Isolated VM" note="Runs code and browsing in a sandbox.">
-                <Switch checked={MOCK_AGENT_SETTINGS.isolatedVm} disabled aria-label="Isolated VM (coming soon)" />
-              </SettingRow>
+              <VmSettingRow key={toolsKey} agentId={agent.id} agentName={agent.name} vm={vm} />
               <SettingRow
                 icon={History}
                 title="Remember past chats"

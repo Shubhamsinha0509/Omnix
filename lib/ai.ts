@@ -62,7 +62,53 @@ type PromptOptions = {
    * way through (`runAgent` passes the instant the run opened).
    */
   now?: Date;
+  /**
+   * Set when the agent has its VM tools on (Phase 6): adds how to use the VM well. `task`
+   * is the scheduled task this run is for, which gets a folder of its own there.
+   */
+  vm?: { canShare: boolean; task: { id: string; name: string } | null };
 };
+
+/**
+ * A task's own folder in the VM: readable, and unique per task even when two tasks share
+ * a name ("daily-full-stack-job-search-168fe6dc"). Same task, same folder, every run.
+ */
+export function taskFolder(task: { id: string; name: string }) {
+  const slug = task.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return `/home/user/tasks/${slug || "task"}-${task.id.slice(0, 8)}`;
+}
+
+/**
+ * How to use the VM well, for any agent and any task (D53). The user writes "find me React
+ * jobs every morning", not a procedure: this is what makes that work — exact answers from
+ * code, a memory per task, only what's new each time, and results handed over as files.
+ */
+function vmRules(vm: NonNullable<PromptOptions["vm"]>) {
+  const lines = [
+    "Your VM:",
+    "- You have your own private Linux VM. Files under /home/user stay between runs and between chats; the VM stops itself when idle and keeps them.",
+    "- Use it for anything that must be exact rather than guessed: calculations, counting, sorting and filtering data, parsing files or API responses, and checking code you wrote by running it.",
+    "- It has python3 (standard library; the requests package is not installed, so use urllib.request or pip install first) and bash. There is no Node.js.",
+    "- Your VM tools are tool calls you make. They are not commands that exist inside the VM.",
+  ];
+  if (vm.task) {
+    const folder = taskFolder(vm.task);
+    lines.push(
+      `- This run is the scheduled task "${vm.task.name}". Its folder is ${folder}: create it if it is missing, and keep everything for this task there, so other tasks never touch it.`,
+      `- The task runs again and again, so it has a memory: before working, read what you saved in ${folder} last time (for example a list of what you already reported). Report only what is new since then. Update that memory only after the results have been delivered, so nothing is marked as done that the user never received. On the first run there is no memory yet; that is expected.`,
+    );
+  } else {
+    lines.push("- Keep files for the user in /home/user, in folders named after what they are for.");
+  }
+  if (vm.canShare) {
+    lines.push("- When you make something the user should have (a CSV, a chart, a report), save it and hand it over with sandbox.share_file, then put the link it returns in your reply exactly as given.");
+  }
+  return lines.join("\n");
+}
 
 /** Turns an agent's settings into the system message the model follows. */
 export function buildSystemPrompt(agent: Pick<Agent, "name" | "instructions">, options: PromptOptions) {
@@ -85,6 +131,7 @@ export function buildSystemPrompt(agent: Pick<Agent, "name" | "instructions">, o
   );
 
   if (options.hasTools) sections.push(TOOL_RULES);
+  if (options.vm) sections.push(vmRules(options.vm));
 
   return sections.join("\n\n");
 }

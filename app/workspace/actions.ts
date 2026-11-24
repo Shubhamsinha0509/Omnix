@@ -8,8 +8,8 @@ import { agentTools, agents, db } from "@/db";
 import { getOwnedAgent } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 import { getConnection } from "@/lib/integrations/connections";
-import { destroySandbox } from "@/lib/sandbox";
-import { TOOLS, isNativeTool } from "@/lib/tools";
+import { destroySandbox, hasSandboxKey } from "@/lib/sandbox";
+import { TOOLS, isNativeTool, type ToolDefinition } from "@/lib/tools";
 import { AVATAR_SEED_PATTERN } from "@/lib/avatars";
 import { MAX_AGENT_INSTRUCTIONS, MAX_AGENT_NAME } from "@/lib/agent-limits";
 
@@ -149,6 +149,53 @@ export async function deleteAgent(agentId: string): Promise<ActionResult> {
 
   revalidatePath("/workspace", "layout");
   redirect("/workspace");
+}
+
+/**
+ * The agent's Isolated VM, as one setting (D53): on gives it every VM tool at once, off
+ * takes them all away. `trustCode` decides whether running code and writing files ask
+ * first; the tools that only read never ask (D29). Scheduled tasks need it on, or each run
+ * waits in the Inbox for approval.
+ */
+export async function setAgentVm(
+  agentId: string,
+  input: { enabled: boolean; trustCode: boolean },
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You need to be signed in." };
+  if (!UUID.test(agentId)) return { error: "Agent not found." };
+
+  const agent = await getOwnedAgent(user.id, agentId);
+  if (!agent) return { error: "Agent not found." };
+  if (input.enabled && !hasSandboxKey()) {
+    return { error: "VMs aren't set up yet: add E2B_API_KEY to .env and restart the dev server." };
+  }
+
+  const vmTools = Object.values(TOOLS).filter(
+    (tool): tool is ToolDefinition => !isNativeTool(tool) && tool.runsIn === "sandbox",
+  );
+
+  try {
+    await db.transaction(async (tx) => {
+      for (const tool of vmTools) {
+        const approval = tool.risk === "read" ? "never" : input.trustCode ? "never" : "always";
+        await tx
+          .insert(agentTools)
+          .values({ agentId: agent.id, tool: tool.key, enabled: input.enabled, connectionId: null, approval })
+          .onConflictDoUpdate({
+            target: [agentTools.agentId, agentTools.tool],
+            set: { enabled: input.enabled, approval, updatedAt: new Date() },
+          });
+      }
+    });
+  } catch (error) {
+    console.error("Failed to save the agent's VM setting:", error);
+    return { error: "Couldn't save that. Please try again." };
+  }
+
+  // The drawer lives on the chat page; the Tasks and settings pages show it too.
+  revalidatePath(`/workspace/agent/${agent.id}`, "layout");
+  return undefined;
 }
 
 /** One change to an agent's tool settings. Sent as the user flips each control. */

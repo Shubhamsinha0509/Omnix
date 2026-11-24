@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VM Setting and Task Warning</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the agent drawer's Settings tab (10-chat-config-settings) and Schedule tab (09-chat-config-schedule), side by side, with the two additions. */
+body{margin:0;background:#F7F8FC}
+[hidden]{display:none!important}
+.omx{--bg:#F7F8FC;--surface:#FFFFFF;--muted:#F1F2F8;--glass:rgba(255,255,255,.84);--fg:#14162A;--fg2:#646A85;--fg3:#8C92AC;--onp:#FFFFFF;--primary:#14162A;--accent:#EEF0FF;--accent-fg:#4338CA;--brand:#6366F1;--brand-text:#4F46E5;--brand-fill:#4F46E5;--border:#E7E9F2;--border2:#D7DAE8;--ok:#16A34A;--ok-text:#15803D;--ok-bg:rgba(22,163,74,.08);--warn:#F59E0B;--warn-bg:#FEF3C7;--warn-text:#B45309;--warn-line:rgba(245,158,11,.45);--danger:#DC2626;--sh-xs:0 1px 2px rgba(20,22,42,.05);--sh-lg:0 2px 6px rgba(20,22,42,.06),0 24px 48px -12px rgba(79,70,229,.22);font-family:Figtree,system-ui,sans-serif;color:var(--fg);background:var(--bg);font-size:14px;line-height:22px;min-height:100vh;box-sizing:border-box;-webkit-font-smoothing:antialiased;padding:32px max(16px,env(safe-area-inset-right,0px)) 48px max(16px,env(safe-area-inset-left,0px))}
+.omx.dark{--bg:#0C0D1C;--surface:#14162A;--muted:#1F2236;--glass:rgba(20,22,42,.86);--fg:#F7F8FC;--fg2:#B9BED3;--fg3:#8C92AC;--onp:#14162A;--primary:#F7F8FC;--accent:rgba(99,102,241,.18);--accent-fg:#C7CBFE;--brand:#7C83F5;--brand-text:#A5ABFB;--brand-fill:#6366F1;--border:#1F2236;--border2:#33374D;--ok:#22C55E;--ok-text:#4ADE80;--ok-bg:rgba(34,197,94,.1);--warn-bg:rgba(245,158,11,.14);--warn-text:#FCD34D;--warn-line:rgba(245,158,11,.4);--danger:#EF4444;--sh-xs:0 1px 2px rgba(0,0,0,.3);--sh-lg:0 2px 6px rgba(0,0,0,.4),0 24px 48px -12px rgba(0,0,0,.6)}
+.omx *{box-sizing:border-box}
+.omx p,.omx h1,.omx h2{margin:0}
+.omx a{color:var(--brand-text);text-decoration:none}
+.omx a:hover{text-decoration:underline}
+.omx button{font-family:inherit}
+.omx :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.h1{font-family:'Bricolage Grotesque',Figtree,sans-serif;font-weight:600;font-size:28px;line-height:34px;letter-spacing:-.015em;text-wrap:balance}
+.h2{font-size:20px;line-height:28px;font-weight:600;letter-spacing:-.005em}
+.s{font-size:13px;line-height:20px}
+.cap{font-size:12px;line-height:16px;font-weight:500}
+.sub{color:var(--fg2)}
+.med{font-weight:500}.semi{font-weight:600}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:16px}
+.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.i16{width:16px;height:16px}.i14{width:14px;height:14px}.i20{width:20px;height:20px}
+.row{display:flex;align-items:center;gap:12px}
+.col{display:flex;flex-direction:column}
+.grow{flex:1 1 0;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:16px}
+.list>*+*{border-top:1px solid var(--border)}
+.lrow{display:flex;align-items:center;gap:12px;padding:12px 16px;min-height:52px}
+.lrow>.i{color:var(--fg2)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:12px;font-weight:600;font-size:14px;line-height:1;border:1px solid transparent;cursor:pointer;white-space:nowrap;background:none;color:var(--fg)}
+.btn.sm{height:36px;padding:0 12px;font-weight:500}
+.bp{background:var(--primary);color:var(--onp)}
+.bs{background:var(--surface);color:var(--fg);border-color:var(--border2);box-shadow:var(--sh-xs)}
+.bd{color:var(--danger);border-color:var(--danger);background:transparent}
+.bw{background:#D97706;color:#fff}
+.omx.dark .bw{background:#F59E0B;color:#14162A}
+.ibtn{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;border:0;background:none;color:var(--fg2);cursor:pointer;flex:none}
+.pill{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border2);font-weight:500;white-space:nowrap;color:var(--fg)}
+.toggle{width:40px;height:24px;border-radius:999px;background:var(--border2);position:relative;flex:none;border:0;padding:0;cursor:pointer}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s cubic-bezier(.34,1.36,.64,1)}
+.toggle.on{background:var(--brand-fill)}
+.toggle.on::after{left:19px}
+.seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--muted)}
+.seg>span{flex:1 1 0;text-align:center;padding:6px 8px;border-radius:8px;color:var(--fg2);font-weight:500;white-space:nowrap}
+.seg>span.on{background:var(--surface);color:var(--fg);box-shadow:var(--sh-xs)}
+.glass{background:var(--glass);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border:1px solid var(--border);box-shadow:var(--sh-lg)}
+.drawer{width:400px;max-width:100%;border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:20px}
+.tabs{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--muted)}
+.tab{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:8px;color:var(--fg2);font-size:12px;line-height:16px;font-weight:500}
+.tab.on{background:var(--surface);color:var(--fg);box-shadow:var(--sh-xs)}
+.tab.on .i{color:var(--brand)}
+.input{min-height:44px;border:1px solid var(--border2);border-radius:12px;background:var(--surface);padding:0 12px;display:flex;align-items:center;gap:8px;width:100%;color:var(--fg)}
+.field{display:flex;flex-direction:column;gap:6px}
+.textarea{border:1px solid var(--border2);border-radius:12px;background:var(--surface);padding:12px;width:100%}
+.label{font-size:12px;line-height:16px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--fg2)}
+.new{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-size:11px;font-weight:600;letter-spacing:.02em}
+/* New: the VM's own settings, opened under its switch */
+.vmbox{padding:4px 16px 16px 46px;display:flex;flex-direction:column;gap:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;background:var(--muted);color:var(--fg2);font-size:12px;font-weight:500}
+.chip .i{color:var(--brand)}
+.subrow{display:flex;align-items:flex-start;gap:12px;padding:12px;border-radius:12px;border:1px solid var(--border)}
+.facts{display:flex;flex-direction:column;gap:6px}
+.facts .row{gap:8px;align-items:flex-start}
+.facts .i{color:var(--fg3);margin-top:3px}
+/* New: the warning a scheduled task gets when it would stop for approval */
+.warnbox{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:16px;background:var(--warn-bg);border:1px solid var(--warn-line)}
+.warnbox .ttl{display:flex;gap:10px;align-items:flex-start;color:var(--warn-text)}
+.okbox{display:flex;gap:10px;align-items:flex-start;padding:12px 16px;border-radius:16px;background:var(--ok-bg);color:var(--ok-text)}
+.stage{display:flex;flex-wrap:wrap;gap:32px;justify-content:center;align-items:flex-start}
+.stage>.col{gap:12px;align-items:stretch}
+.head{max-width:860px;margin:0 auto 28px;display:flex;flex-direction:column;gap:8px}
+@media (prefers-reduced-motion:reduce){.toggle::after{transition:none}}
+</style>
+</head>
+<body>
+<div class="omx">
+
+<header class="head">
+<h1 class="h1">Isolated VM, made simple</h1>
+<p class="sub">Two additions to the agent drawer. Flip the switches and press the buttons to see each state. Press <span class="mono">d</span> for dark mode.</p>
+</header>
+
+<div class="stage">
+
+<!-- 1. Settings tab: the real Isolated VM switch -->
+<div class="col">
+<span class="label">1 · Settings tab</span>
+<aside class="drawer glass" aria-label="Agent configuration, Settings">
+<div class="row"><h2 class="h2 grow">Agent configuration</h2><button class="ibtn" aria-label="Close configuration"><svg class="i i20" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+<div class="tabs" role="tablist"><span class="tab" role="tab"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Instructions</span><span class="tab" role="tab"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/></svg>Tools</span><span class="tab" role="tab"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5M16 2v4M8 2v4M3 10h5"/><circle cx="16" cy="16" r="6"/><path d="M16 14v2l1 1"/></svg>Schedule</span><span class="tab on" role="tab"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</span></div>
+
+<div class="panel list">
+<div class="lrow"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg><span class="col grow"><span class="med">Model</span><span class="s sub">Set in .env for now.</span></span><span class="pill s">Nemotron 3 Ultra</span></div>
+
+<div>
+<div class="lrow"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span class="col grow"><span class="row" style="gap: 8px"><span class="med">Isolated VM</span><span class="new">NEW</span></span><span class="s sub" id="vm-sub">A private computer for this agent: run code, keep files, browse.</span></span><button class="toggle on" id="vm-toggle" role="switch" aria-checked="true" aria-label="Isolated VM"></button></div>
+
+<div class="vmbox" id="vm-box">
+<div class="col" style="gap: 6px">
+<span class="cap sub">Gives Job Searcher</span>
+<div class="chips">
+<span class="chip"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>Run code</span>
+<span class="chip"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Save, read and list files</span>
+<span class="chip"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M12 12v6M9 15l3 3 3-3"/></svg>Hand you files</span>
+<span class="chip"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/></svg>Open pages in its browser</span>
+</div>
+</div>
+
+<div class="subrow">
+<span class="col grow"><span class="med">Run code without asking</span><span class="s sub" id="trust-note">Off: you approve each program before it runs. Scheduled tasks wait in your Inbox for that.</span></span>
+<button class="toggle" id="trust-toggle" role="switch" aria-checked="false" aria-label="Run code without asking"></button>
+</div>
+
+<div class="facts s sub">
+<span class="row"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Starts when the agent first needs it, stops itself after 10 idle minutes and keeps its files.</span>
+<span class="row"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Holds none of your keys or accounts. Billed per second while running.</span>
+<span class="row"><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>Watch it, start or stop it in the <a href="#run">run panel</a>.</span></span>
+</div>
+</div>
+</div>
+
+<div class="lrow"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M12 7v5l4 2"/></svg><span class="col grow"><span class="med">Remember past chats</span><span class="s sub">Coming soon.</span></span><button class="toggle" role="switch" aria-checked="false" aria-label="Remember past chats" disabled style="opacity: .5"></button></div>
+</div>
+
+<div class="col" style="gap: 10px; padding: 16px; border-radius: 16px; border: 1px solid var(--danger)"><span class="semi" style="color: var(--danger)">Delete Job Searcher</span><p class="s sub">Removes the agent, its schedule, chat history and its VM with everything on it.</p><button class="btn bd sm" style="align-self: flex-start">Delete agent</button></div>
+</aside>
+</div>
+
+<!-- 3. Schedule tab: the warning a task gets when it would stop for approval -->
+<div class="col">
+<span class="label">3 · Schedule tab</span>
+<aside class="drawer glass" aria-label="Agent configuration, Schedule">
+<div class="row"><h2 class="h2 grow">Agent configuration</h2><button class="ibtn" aria-label="Close configuration"><svg class="i i20" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+<div class="tabs" role="tablist"><span class="tab" role="tab"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Instructions</span><span class="tab" role="tab"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/></svg>Tools</span><span class="tab on" role="tab"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5M16 2v4M8 2v4M3 10h5"/><circle cx="16" cy="16" r="6"/><path d="M16 14v2l1 1"/></svg>Schedule</span><span class="tab" role="tab"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/></svg>Settings</span></div>
+
+<div class="panel row" style="padding: 12px 16px"><span style="color: var(--brand)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5M16 2v4M8 2v4M3 10h5"/><circle cx="16" cy="16" r="6"/><path d="M16 14v2l1 1"/></svg></span><span class="col grow"><span class="semi">Run on a schedule</span><span class="cap sub">Job Searcher runs by itself and reports to your Inbox.</span></span><button class="toggle on" role="switch" aria-checked="true" aria-label="Run on a schedule"></button></div>
+<div class="col" style="gap: 6px"><span class="med">Repeat</span><div class="seg s"><span>Once</span><span class="on">Daily</span><span>Weekdays</span><span>Weekly</span><span>Custom</span></div></div>
+<div class="row" style="gap: 12px; align-items: flex-start"><label class="field grow"><span class="med">Time</span><span class="input">9:00 AM<span class="grow"></span><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span></label><label class="field grow"><span class="med">Timezone</span><span class="input">Asia/Kolkata<span class="grow"></span><svg class="i i14" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span></label></div>
+<label class="field"><span class="med">Each run</span><span class="textarea" style="min-height: 72px">Find me new React and Node jobs in Bangalore or remote, and send me a list.</span></label>
+
+<div class="warnbox" id="warn" role="status">
+<div class="ttl"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true" style="margin-top: 3px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg>
+<p class="s"><span class="semi">This task will wait for you each time it runs code.</span> Job Searcher asks before running code in its VM, and nobody is there to answer when it runs by itself, so each run will stop in your Inbox until you approve.</p></div>
+<div class="row" style="gap: 8px; flex-wrap: wrap"><button class="btn sm bw" id="trust-btn">Let it run code without asking</button><button class="btn sm bs" id="keep-btn">Keep asking</button></div>
+</div>
+<div class="okbox" id="ok" hidden><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true" style="margin-top: 3px"><path d="M20 6 9 17l-5-5"/></svg><p class="s"><span class="semi">Job Searcher will run code without asking.</span> Change it any time in Settings → Isolated VM.</p></div>
+<p class="s sub" id="kept" hidden>Each run will wait in your Inbox for approval before it runs code.</p>
+
+<button class="btn bp" style="width: 100%">Save schedule</button>
+</aside>
+</div>
+
+</div>
+
+<script>
+(function(){
+  var omx=document.querySelector(".omx"),root=document.documentElement,mq=matchMedia("(prefers-color-scheme: dark)"),manual=null;
+  function theme(){var t=root.getAttribute("data-theme");var dk=manual!==null?manual:(t?t==="dark":(location.hash==="#dark"||mq.matches));omx.classList.toggle("dark",dk);document.body.style.background=dk?"#0C0D1C":"#F7F8FC";root.style.colorScheme=dk?"dark":"light"}
+  theme();mq.addEventListener("change",theme);new MutationObserver(theme).observe(root,{attributes:true,attributeFilter:["data-theme"]});
+  document.addEventListener("keydown",function(e){if(e.key==="d"){manual=!omx.classList.contains("dark");theme()}});
+
+  var vmT=document.getElementById("vm-toggle"),box=document.getElementById("vm-box"),vmSub=document.getElementById("vm-sub");
+  var trT=document.getElementById("trust-toggle"),trNote=document.getElementById("trust-note");
+  var warn=document.getElementById("warn"),ok=document.getElementById("ok"),kept=document.getElementById("kept");
+  var state={vm:true,trust:false,kept:false};
+  function set(k,v){state[k]=v;render()}
+  function render(){
+    vmT.classList.toggle("on",state.vm);vmT.setAttribute("aria-checked",String(state.vm));box.hidden=!state.vm;
+    vmSub.textContent=state.vm?"A private computer for this agent: run code, keep files, browse.":"Off: this agent has no VM. Turn on to let it run code, keep files and browse.";
+    trT.classList.toggle("on",state.trust);trT.setAttribute("aria-checked",String(state.trust));
+    trNote.textContent=state.trust?"On: programs run straight away, in chat and in scheduled tasks. The VM holds none of your keys.":"Off: you approve each program before it runs. Scheduled tasks wait in your Inbox for that.";
+    // The warning only matters for an agent with its VM on that still asks first.
+    var stalls=state.vm&&!state.trust;
+    warn.hidden=!stalls||state.kept;kept.hidden=!stalls||!state.kept;ok.hidden=stalls||!state.vm;
+  }
+  vmT.addEventListener("click",function(){set("vm",!state.vm)});
+  trT.addEventListener("click",function(){state.kept=false;set("trust",!state.trust)});
+  document.getElementById("trust-btn").addEventListener("click",function(){set("trust",true)});
+  document.getElementById("keep-btn").addEventListener("click",function(){set("kept",true)});
+  render();
+})();
+</script>
+</div>
+</body>
+</html>

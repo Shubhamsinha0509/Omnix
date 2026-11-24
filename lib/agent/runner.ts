@@ -102,6 +102,8 @@ export type RunAgentOptions = {
   conversationId?: string | null;
   /** The task this run belongs to (Phase 4). */
   taskId?: string | null;
+  /** That task's name: with the id, it names the task's own folder in the VM. */
+  taskName?: string | null;
   /** The conversation so far, oldest first. */
   history: HistoryMessage[];
   /** IANA timezone the user is in; "UTC" when unknown. */
@@ -167,6 +169,14 @@ export async function runAgent(options: RunAgentOptions): Promise<RunOutcome> {
         timezone,
         hasTools: tools.length > 0,
         now: new Date(started.startedAt),
+        // How to use the VM, only for an agent that has its VM tools on.
+        vm: tools.some(({ tool }) => !isNativeTool(tool) && tool.runsIn === "sandbox")
+          ? {
+              canShare: tools.some(({ tool }) => tool.key === "sandbox.share_file"),
+              task:
+                options.taskId && options.taskName ? { id: options.taskId, name: options.taskName } : null,
+            }
+          : undefined,
       }),
     },
     ...history.map((message) => ({ role: message.role, content: message.content })),

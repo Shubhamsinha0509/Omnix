@@ -16,6 +16,8 @@ import { TASK_LIMITS } from "@/lib/agent-limits";
 import { nextOccurrence } from "@/lib/schedule/cron";
 import type { TaskView } from "@/lib/tasks";
 import { fromCron, toCron } from "./AgentTasks";
+import type { VmState } from "@/lib/vm-state";
+import { TaskApprovalWarning } from "./VmSetting";
 
 type Repeat = "once" | "daily" | "weekdays" | "weekly" | "custom";
 
@@ -53,10 +55,13 @@ export function AgentSchedule({
   agentId,
   agentName,
   tasks,
+  vm,
 }: {
   agentId: string;
   agentName: string;
   tasks: TaskView[];
+  /** The agent's VM setting: a scheduled run that would wait for approval says so. */
+  vm: VmState;
 }) {
   const task = tasks.find((candidate) => candidate.trigger === "schedule") ?? null;
   const read = fromCron(task?.schedule ?? "0 9 * * 1-5");
@@ -225,6 +230,9 @@ export function AgentSchedule({
           </span>
         )}
       </div>
+
+      {/* A schedule that runs by itself can't stop for approval with nobody there (22). */}
+      {enabled && <TaskApprovalWarning agentId={agentId} agentName={agentName} vm={vm} />}
 
       {error && (
         <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-body-s text-destructive">
