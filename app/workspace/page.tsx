@@ -11,6 +11,11 @@ import { agents, conversations, db } from "@/db";
 import { listAgentCards } from "@/lib/agent-cards";
 import { CHAT_MODEL, hasModelKey } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
+import { agentFacts } from "@/lib/agent-facts";
+import { suggestionsFor } from "@/lib/agent-guide";
+import { listConnections } from "@/lib/integrations/connections";
+import { listTasks } from "@/lib/tasks";
+import { listToolSettings } from "@/lib/tools";
 import { modelLabel, shortWhen } from "@/lib/format";
 
 const HOME_AGENTS = 5;
@@ -25,11 +30,7 @@ export default async function WorkspacePage() {
   const [cards, pickable, recent] = await Promise.all([
     listAgentCards(user.id, HOME_AGENTS),
     // Every agent, for the composer's picker.
-    db
-      .select({ id: agents.id, name: agents.name, avatarSeed: agents.avatarSeed })
-      .from(agents)
-      .where(eq(agents.userId, user.id))
-      .orderBy(desc(agents.createdAt)),
+    db.select().from(agents).where(eq(agents.userId, user.id)).orderBy(desc(agents.createdAt)),
     // Latest chats across every agent, so the user can pick up where they left off.
     db
       .select({
@@ -46,6 +47,18 @@ export default async function WorkspacePage() {
       .orderBy(desc(conversations.updatedAt))
       .limit(RECENT_CHATS),
   ]);
+
+  // Each agent's own chat starters (lib/agent-guide.ts), so the chips under the composer fit
+  // whichever agent is picked rather than being the same few for everyone.
+  const connections = await listConnections(user.id);
+  const starters = Object.fromEntries(
+    await Promise.all(
+      pickable.map(async (agent) => {
+        const [tools, tasks] = await Promise.all([listToolSettings(agent), listTasks(agent.id, user.id)]);
+        return [agent.id, suggestionsFor(agentFacts(agent, { tools, connections, tasks }), 4)] as const;
+      }),
+    ),
+  );
 
   const firstName = user.name?.trim().split(/\s+/)[0] ?? null;
 
@@ -67,7 +80,11 @@ export default async function WorkspacePage() {
           </p>
         )}
 
-        <HomeComposer agents={pickable} model={{ id: CHAT_MODEL, label: modelLabel(CHAT_MODEL) }} />
+        <HomeComposer
+          agents={pickable.map(({ id, name, avatarSeed }) => ({ id, name, avatarSeed }))}
+          starters={starters}
+          model={{ id: CHAT_MODEL, label: modelLabel(CHAT_MODEL) }}
+        />
 
         <div className="flex items-center justify-between pt-4">
           <h2 className="text-h2 font-semibold">Your agents</h2>

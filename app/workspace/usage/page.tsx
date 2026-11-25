@@ -7,7 +7,8 @@ import { PageWrap } from "@/components/custom/design/HeroWash";
 import { UsageMeter } from "@/components/custom/design/UsageMeter";
 import { AgentAvatar } from "@/components/custom/workspace/AgentAvatar";
 import { getCurrentUser } from "@/lib/auth";
-import { MOCK_INVOICES, MOCK_PLAN, MOCK_PLANS } from "@/lib/mock-data";
+import { MOCK_CURRENT_PLAN_ID, MOCK_INVOICES } from "@/lib/mock-data";
+import { PRICING_PLANS, getPlan, type PlanAllowances } from "@/lib/pricing";
 import { getMonthlyUsage } from "@/lib/usage";
 import { cn } from "@/lib/utils";
 
@@ -20,16 +21,26 @@ function Feature({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** "1 scheduled task", "Unlimited scheduled tasks". */
+function scheduledTasks(allowance: PlanAllowances["scheduledTasks"]) {
+  if (allowance === "unlimited") return "Unlimited scheduled tasks";
+  return `${allowance} scheduled task${allowance === 1 ? "" : "s"}`;
+}
+
 /**
  * Usage & billing (design/reference/17-usage-billing.html). Usage is real, from the run
- * log; the plan, its limits, upgrades and invoices are MOCK_* in lib/mock-data.ts.
+ * log; the plans and their allowances are the same ones the landing page shows
+ * (lib/pricing.ts). Which plan you're on, upgrades and invoices are still mock
+ * (MOCK_CURRENT_PLAN_ID, MOCK_INVOICES in lib/mock-data.ts).
  */
 export default async function UsagePage() {
   const user = await getCurrentUser();
   if (!user) return null;
   const usage = await getMonthlyUsage(user.id);
 
-  const percent = Math.min(100, (usage.tokens / MOCK_PLAN.tokensPerMonth) * 100);
+  const current = getPlan(MOCK_CURRENT_PLAN_ID);
+  const allowances = current.allowances;
+  const percent = Math.min(100, (usage.tokens / allowances.tokensPerMonth) * 100);
   const top = usage.byAgent[0]?.tokens ?? 0;
 
   return (
@@ -44,7 +55,7 @@ export default async function UsagePage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-col">
               <span className="text-caption font-medium text-muted-foreground">Current plan</span>
-              <span className="font-display text-h1 font-semibold tracking-[-0.015em]">{MOCK_PLAN.name}</span>
+              <span className="font-display text-h1 font-semibold tracking-[-0.015em]">{current.name}</span>
             </div>
             {/* TODO(backend): billing. */}
             <ComingSoonButton variant="brand" message="Billing is coming soon">
@@ -52,9 +63,12 @@ export default async function UsagePage() {
             </ComingSoonButton>
           </div>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            <Feature>{MOCK_PLAN.tokensPerMonth.toLocaleString()} tokens a month</Feature>
-            <Feature>{MOCK_PLAN.webSearchesPerMonth} web searches a month</Feature>
-            <Feature>{MOCK_PLAN.scheduledAgents} scheduled agents</Feature>
+            <Feature>{allowances.tokensPerMonth.toLocaleString()} tokens a month</Feature>
+            <Feature>{allowances.webSearchesPerMonth.toLocaleString()} web searches a month</Feature>
+            <Feature>
+              {allowances.agents} agent{allowances.agents === 1 ? "" : "s"}
+            </Feature>
+            <Feature>{scheduledTasks(allowances.scheduledTasks)}</Feature>
           </ul>
         </section>
 
@@ -64,14 +78,14 @@ export default async function UsagePage() {
             <span className="font-display text-h1 font-semibold tracking-[-0.015em]">{Math.round(percent)}%</span>
             <span className="flex-1" />
             <span className="text-body-s text-muted-foreground">
-              {usage.tokens.toLocaleString()} of {MOCK_PLAN.tokensPerMonth.toLocaleString()}
+              {usage.tokens.toLocaleString()} of {allowances.tokensPerMonth.toLocaleString()}
             </span>
           </div>
           <UsageMeter value={percent} label="Tokens used" />
           <div className="flex justify-between text-body-s text-muted-foreground">
             <span>Resets {format(usage.resetsAt, "MMM d")}</span>
             <span>
-              Web searches: {usage.webSearches} of {MOCK_PLAN.webSearchesPerMonth}
+              Web searches: {usage.webSearches} of {allowances.webSearchesPerMonth.toLocaleString()}
             </span>
           </div>
         </section>
@@ -103,29 +117,38 @@ export default async function UsagePage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-h2 font-semibold">Plans</h2>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {MOCK_PLANS.map((plan) => {
-            const current = plan.name === MOCK_PLAN.name;
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          {PRICING_PLANS.map((plan) => {
+            const isCurrent = plan.id === current.id;
             return (
               <div
-                key={plan.name}
+                key={plan.id}
                 className={cn(
                   "flex flex-col gap-3 rounded-lg border bg-card p-6",
-                  !current && "border-brand",
+                  plan.popular && "border-brand",
                 )}
               >
                 <div className="flex items-center">
                   <span className="flex-1 text-h3 font-semibold">{plan.name}</span>
-                  {current ? <Badge variant="neutral">Current</Badge> : <span className="font-semibold">{plan.price}</span>}
+                  {isCurrent ? (
+                    <Badge variant="neutral">Current</Badge>
+                  ) : (
+                    <span className="font-semibold">
+                      {plan.monthly === 0 ? "Free" : `$${plan.monthly} / month`}
+                    </span>
+                  )}
                 </div>
                 <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                  {plan.features.map((feature) => (
-                    <Feature key={feature}>{feature}</Feature>
-                  ))}
+                  {plan.features
+                    .filter((feature) => feature.included)
+                    .map((feature) => (
+                      <Feature key={feature.text}>{feature.text}</Feature>
+                    ))}
                 </ul>
-                {!current && (
+                <div className="flex-1" />
+                {!isCurrent && (
                   <ComingSoonButton variant="brand" className="self-start" message="Billing is coming soon">
-                    Upgrade to {plan.name}
+                    {plan.cta}
                   </ComingSoonButton>
                 )}
               </div>

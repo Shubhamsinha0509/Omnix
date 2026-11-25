@@ -20,11 +20,13 @@ the redesign started; "new" means the route doesn't exist yet.
 | 12-agents | new: `/workspace/agents` | — (agents only listed on Home/sidebar) | agents + task/run counts |
 | 20-empty-agents | `/workspace/agents` with no agents | — | — |
 | 13-live-run | `/workspace/agent/[id]/runs/[runId]` | `RunTimeline` | `runs` + `run_steps` (`getRunDetail`) |
+| 22-vm-setting-and-task-warning | drawer Settings and Schedule tabs, `/workspace/agent/[id]/tasks` | `VmSettingRow`, `TaskApprovalWarning` | agent tool grants (`setAgentVm`) |
+| 23-landing-pricing | `/` (the `#pricing` section) | `components/custom/marketing/Pricing.tsx` | `lib/pricing.ts` (a starting set: not enforced, no billing yet) |
 | 21-chat-run-panel | `/workspace/agent/[id]` (beside the chat) | `ChatRunPanel` in `AgentChat` | the chat stream's own events (live, this page only) |
 | 14-inbox | `/workspace/inbox` | `Inbox` | `notifications`, approvals in tasks |
 | 15-integrations | new: `/workspace/integrations` (old `/workspace/connections` redirects) | `Connections` | `connections`, Gmail OAuth start/callback |
 | 16-marketplace | new: `/workspace/marketplace` | — (sidebar link 404s) | none yet → mock data |
-| 17-usage-billing | new: `/workspace/usage` | — | runs per day (real) + plan/billing (mock) |
+| 17-usage-billing | new: `/workspace/usage` | — | runs per day (real) + plans from `lib/pricing.ts`; billing mock |
 | 18-settings | new: `/workspace/settings` | — (only per-agent settings exist) | session user; preferences mock |
 
 Not in the reference, restyled with the shared components rather than redesigned:
@@ -38,7 +40,7 @@ All 20 screens are built. What is real and what is mock (everything mock is in
 
 | Screen | Mock parts |
 | --- | --- |
-| Shell | plan name ("Free plan"); token usage is real, the 100K allowance is `MOCK_PLAN` |
+| Shell | which plan you're on ("Free plan", `MOCK_CURRENT_PLAN_ID`); token usage is real, measured against that plan's allowance in `lib/pricing.ts` |
 | Chat drawer → Settings | Remember past chats (`MOCK_AGENT_SETTINGS`, disabled). Isolated VM is real (22, `VmSettingRow`) |
 | Chat drawer → Schedule | "Once" (disabled: one-off runs need backend) |
 | Create agent | File analysis, Code execution, Multi-modal, Custom tools (coming soon) |
@@ -47,7 +49,7 @@ All 20 screens are built. What is real and what is mock (everything mock is in
 | Inbox | none — `?preview=sample` shows `MOCK_INBOX_ITEMS` in development |
 | Integrations | Gmail, Notion, Jira and Slack are real (Slack needs a Slack app, D48); Drive, Calendar, GitHub and Discord are still `MOCK_INTEGRATIONS` |
 | Marketplace | all templates (`MOCK_TEMPLATES`); "Use template" → real Create agent |
-| Usage & billing | plan, limits, plans, invoices (`MOCK_PLAN`, `MOCK_PLANS`, `MOCK_INVOICES`) |
+| Usage & billing | which plan you're on, upgrades and invoices (`MOCK_CURRENT_PLAN_ID`, `MOCK_INVOICES`); the plans and their allowances are the landing page's own (`lib/pricing.ts`), but nothing enforces them |
 | Settings | photo, timezone, API keys, notifications (`MOCK_API_KEYS`, `MOCK_NOTIFICATION_PREFS`) |
 | Workspaces | the page itself (`MOCK_WORKSPACES`) |
 | Auth | email sign-in (no provider) |

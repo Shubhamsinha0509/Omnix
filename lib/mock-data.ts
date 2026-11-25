@@ -6,38 +6,16 @@
  * each one is waiting on. Nothing in this file is read by the agent runner or the API.
  */
 
+import type { PlanId } from "@/lib/pricing";
+
 /**
- * The user's plan and its allowances. Usage itself is real (lib/usage.ts, from the run
- * log); what it is measured against isn't.
- * TODO(backend): plans, limits and billing (docs/08-roadmap.md, Phase 7; pricing is an
- * open question). The Pro price is the design's placeholder until it is decided.
+ * Which plan the signed-in user is on. The plans themselves are real and written down once
+ * in lib/pricing.ts (what the landing page shows); usage is real too (lib/usage.ts, from
+ * the run log). What's mock is only this: everyone is on Free.
+ * TODO(backend): plans, limits and billing (docs/08-roadmap.md, Phase 7). Nothing enforces
+ * an allowance yet, and there is no way to change plan.
  */
-export type Plan = {
-  name: "Free" | "Pro";
-  tokensPerMonth: number;
-  webSearchesPerMonth: number;
-  scheduledAgents: number | "unlimited";
-};
-
-export const MOCK_PLAN: Plan = {
-  name: "Free",
-  tokensPerMonth: 100_000,
-  webSearchesPerMonth: 100,
-  scheduledAgents: 3,
-};
-
-export const MOCK_PLANS = [
-  {
-    name: "Free",
-    price: null,
-    features: ["100K tokens / month", "3 scheduled agents", "Community support"],
-  },
-  {
-    name: "Pro",
-    price: "[YOUR PRICE] / month",
-    features: ["Higher monthly token limit", "Unlimited scheduled agents", "Advanced models", "Priority support"],
-  },
-] as const;
+export const MOCK_CURRENT_PLAN_ID: PlanId = "free";
 
 /** TODO(backend): invoices come with billing. */
 export const MOCK_INVOICES: { id: string; date: string; amount: string }[] = [];
@@ -80,8 +58,8 @@ export const MOCK_INBOX_ITEMS = (agent: { id: string; name: string; avatarSeed: 
         label: "Sending email",
         summary: `${agent.name} wants to send an email`,
         details: [
-          { label: "To", value: "Outskill (Zoom)" },
-          { label: "Message", value: "Thanks for the reminder. See you at 6:55 PM." },
+          { label: "To", value: "events@brightloop.example" },
+          { label: "Message", value: "Thanks for the reminder. See you at 6:30 PM." },
         ],
         expiresAt: at(-60 * 24),
         resumable: true,
@@ -93,7 +71,8 @@ export const MOCK_INBOX_ITEMS = (agent: { id: string; name: string; avatarSeed: 
       id: "sample-digest",
       kind: "task_result" as const,
       title: "Morning inbox digest",
-      body: "5 new emails since yesterday. All unread. Two were the same Outskill thread, so they're listed once.\n\n| From | Subject | Time |\n| --- | --- | --- |\n| Outskill (Zoom) | Claude Code 101 webinar: reminder | 12:26 |\n| Nate Herk | Newsletter teaser from AI Automation Society | 15:04 |\n| Zomato | Promo: order food instead of cooking | 11:43 |",
+      // Invented senders: sample data must never be anyone's real inbox.
+      body: "5 new emails since yesterday. All unread. Two were the same Brightloop thread, so they're listed once.\n\n| From | Subject | Time |\n| --- | --- | --- |\n| Brightloop Events | Product workshop: reminder | 12:26 |\n| Northwind Weekly | This week's newsletter | 15:04 |\n| Kestrel Foods | Promo: 20% off lunch | 11:43 |",
       unread: true,
       createdAt: at(90),
       approval: null,

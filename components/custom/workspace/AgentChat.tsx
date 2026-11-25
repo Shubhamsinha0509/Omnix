@@ -44,12 +44,12 @@ import { TOOL_ICONS } from "@/components/custom/design/ToolPermissionRow";
 import { cn } from "@/lib/utils";
 import { AgentAvatar } from "./AgentAvatar";
 import AgentConfigPanel, { type AgentConfig, type ConfigTab } from "./AgentConfigPanel";
+import type { SetupRecommendation } from "@/lib/agent-guide";
 import { ApprovalCard } from "./ApprovalCard";
+import { SetupCard } from "./SetupCard";
 import ChatRunPanel, { type SavedRun } from "./ChatRunPanel";
 import { Markdown } from "./Markdown";
 
-/** Prompts offered in an empty chat (05-chat-empty). */
-const SUGGESTIONS = ["Summarize my unread email", "Find emails from Outskill", "What can you do?"];
 
 export type ChatMessage = {
   id: string;
@@ -98,6 +98,10 @@ type Props = {
   vm: { ready: boolean; initial: SandboxView };
   /** The open chat's most recent saved run, so the panel has it after a reload. */
   savedRun: SavedRun | null;
+  /** Prompts offered in an empty chat (05-chat-empty), fitted to this agent (lib/agent-guide.ts). */
+  starters: string[];
+  /** Setup this agent's job still needs, shown in an empty chat until it's done. */
+  setup: SetupRecommendation[];
 };
 
 /**
@@ -133,6 +137,8 @@ export default function AgentChat({
   initialTab = null,
   vm,
   savedRun,
+  starters,
+  setup,
 }: Props) {
   const router = useRouter();
   /** The configuration drawer: closed to start (05/06), open on a tab (07–10). */
@@ -578,7 +584,7 @@ export default function AgentChat({
                 </Button>
               )}
               <div className="relative flex flex-wrap justify-center gap-2 pt-4">
-                {SUGGESTIONS.map((suggestion) => (
+                {starters.map((suggestion) => (
                   <SuggestionChip
                     key={suggestion}
                     disabled={isStreaming || !aiReady}
@@ -588,6 +594,13 @@ export default function AgentChat({
                   </SuggestionChip>
                 ))}
               </div>
+              {/* What this agent's job still needs, from its instructions (lib/agent-guide.ts). */}
+              <SetupCard
+                agentId={agent.id}
+                agentName={agent.name}
+                recommendations={setup}
+                className="relative mt-4 max-w-[560px]"
+              />
             </div>
           ) : (
             <div className="mx-auto flex w-full max-w-[840px] flex-col gap-6 px-4 py-6 md:px-8">

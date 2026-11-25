@@ -3,6 +3,7 @@ import { CalendarDays, FileText, Layers, Mail, MessageSquare } from "lucide-reac
 
 import { buttonVariants } from "@/components/ui/button";
 import { HeroWash } from "@/components/custom/design/HeroWash";
+import { Pricing } from "@/components/custom/marketing/Pricing";
 import { RunStepRow } from "@/components/custom/design/RunStepRow";
 import { Logo } from "@/components/custom/shell/Logo";
 import { ThemeToggle } from "@/components/custom/shell/ThemeToggle";
@@ -15,6 +16,7 @@ const NAV = [
   { label: "Features", href: "#how" },
   { label: "How it works", href: "#how" },
   { label: "Integrations", href: "#tools" },
+  { label: "Pricing", href: "#pricing" },
   { label: "Docs", href: "#how" },
 ];
 
@@ -167,6 +169,9 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+
+      {/* 23-landing-pricing */}
+      <Pricing appHref={APP_HREF} />
 
       <footer className="relative mx-auto flex max-w-[1040px] flex-wrap justify-between gap-3 border-t p-6">
         <span className="text-body-s text-muted-foreground">© 2026 Omnix</span>

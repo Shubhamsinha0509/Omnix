@@ -1,5 +1,6 @@
 import { mcpToolSweep } from "./mcp";
 import { retentionSweep } from "./retention";
+import { staleRunSweep } from "./stale-runs";
 import { runTask, taskScheduler } from "./tasks";
 
 /**
@@ -7,6 +8,6 @@ import { runTask, taskScheduler } from "./tasks";
  * registers. The scaffold examples that came with the starter were removed when real
  * background work arrived in Phase 4.
  */
-export const functions = [taskScheduler, runTask, retentionSweep, mcpToolSweep];
+export const functions = [taskScheduler, runTask, retentionSweep, mcpToolSweep, staleRunSweep];
 
-export { mcpToolSweep, retentionSweep, runTask, taskScheduler };
+export { mcpToolSweep, retentionSweep, runTask, staleRunSweep, taskScheduler };

@@ -11,6 +11,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { describeSchedule } from "@/lib/schedule/cron";
 import { listTasks } from "@/lib/tasks";
 import { listToolSettings } from "@/lib/tools";
+import { SetupCard } from "@/components/custom/workspace/SetupCard";
+import { agentFacts } from "@/lib/agent-facts";
+import { setupFor } from "@/lib/agent-guide";
+import { listConnections } from "@/lib/integrations/connections";
 
 /** "Your agent is ready" (design/reference/19-success.html), shown right after Create agent. */
 export default async function AgentCreatedPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,7 +24,13 @@ export default async function AgentCreatedPage({ params }: { params: Promise<{ i
   const agent = await getOwnedAgent(user.id, id);
   if (!agent) notFound();
 
-  const [tools, tasks] = await Promise.all([listToolSettings(agent), listTasks(agent.id, user.id)]);
+  const [tools, tasks, connections] = await Promise.all([
+    listToolSettings(agent),
+    listTasks(agent.id, user.id),
+    listConnections(user.id),
+  ]);
+  // What its job still needs, from what the user wrote (lib/agent-guide.ts).
+  const setup = setupFor(agentFacts(agent, { tools, connections, tasks }), agent.id);
   const enabled = tools.filter((tool) => tool.enabled).map((tool) => tool.key);
   const scheduled = tasks.find((task) => task.enabled && task.trigger === "schedule" && task.schedule);
 
@@ -54,6 +64,7 @@ export default async function AgentCreatedPage({ params }: { params: Promise<{ i
             </code>
           ))}
         </div>
+        <SetupCard agentId={agent.id} agentName={agent.name} recommendations={setup} className="mt-2" />
         <div className="flex flex-col justify-center gap-3 pt-2 sm:flex-row">
           <Link href={`/workspace/agent/${agent.id}`} className={buttonVariants()}>
             <Play className="size-3.5 fill-current" />

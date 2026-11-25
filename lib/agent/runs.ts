@@ -87,6 +87,71 @@ export async function finishRun({ runId, status, error, inputTokens = 0, outputT
 }
 
 /**
+ * How long a run may go silent before it counts as dead. The longest single step is a VM
+ * tool call at about 2.5 minutes, so an hour without a new step means whatever was running
+ * it has gone (a deploy, a crash, a stopped Inngest dev server). A decided approval is
+ * picked up within seconds, so a quarter of an hour with no progress after it means the
+ * same.
+ */
+export const STALE_RUN = { silentMs: 60 * 60 * 1000, afterDecisionMs: 15 * 60 * 1000 };
+
+/**
+ * Closes runs that can never finish: their worker is gone, so without this they would show
+ * as "running" or "waiting for you" for ever, and an approval card could be answered with
+ * nobody left to act on it.
+ *
+ * - `queued` / `running` with no new step for `STALE_RUN.silentMs` → failed.
+ * - `waiting_approval` whose approval expired → failed.
+ * - `waiting_approval` whose approval was decided more than `afterDecisionMs` ago and the
+ *   run never moved on → failed (a resumed run goes back to `running` at once).
+ *
+ * The pending approval cards of the runs it closes are expired too. Each statement only
+ * matches rows already past their limit, so running this often, or twice at once, does no
+ * harm. `userId` narrows it to one user (cheap enough to run on a page load).
+ */
+export async function closeStaleRuns(userId?: number): Promise<number> {
+  const mine = userId === undefined ? sql`true` : sql`r.user_id = ${userId}`;
+  // As ISO text cast in SQL: postgres-js can't bind a Date inside a raw `sql` template.
+  const silent = sql`${new Date(Date.now() - STALE_RUN.silentMs).toISOString()}::timestamptz`;
+  const decidedBefore = sql`${new Date(Date.now() - STALE_RUN.afterDecisionMs).toISOString()}::timestamptz`;
+
+  const silentRuns = await db.execute<{ id: string }>(sql`
+    update runs r
+       set status = 'failed', finished_at = now(),
+           error = 'This run stopped responding and was closed. Whatever was running it went away (a restart or a crash); run it again.'
+     where ${mine}
+       and r.status in ('queued', 'running')
+       and coalesce((select max(s.created_at) from run_steps s where s.run_id = r.id), r.started_at) < ${silent}
+    returning r.id`);
+
+  const abandoned = await db.execute<{ id: string }>(sql`
+    update runs r
+       set status = 'failed', finished_at = now(),
+           error = case when a.status = 'pending'
+             then 'Nobody answered the approval in time, so the run was closed.'
+             else 'The approval was answered, but the run had already stopped (a restart or a crash), so it was closed. Run it again.'
+           end
+      from approvals a
+     where a.run_id = r.id
+       and ${mine}
+       and r.status = 'waiting_approval'
+       and (
+         (a.status = 'pending' and a.expires_at < now())
+         or (a.status <> 'pending' and coalesce(a.decided_at, a.created_at) < ${decidedBefore})
+       )
+    returning r.id`);
+
+  const closed = [...silentRuns, ...abandoned].map((row) => row.id);
+  if (closed.length > 0) {
+    // A card for a run that no longer exists would be a button that does nothing.
+    await db.execute(sql`
+      update approvals set status = 'expired', decided_at = now(), resume = '{}'::jsonb
+       where status = 'pending' and run_id in (${sql.join(closed.map((id) => sql`${id}`), sql`, `)})`);
+  }
+  return closed.length;
+}
+
+/**
  * Reading the log back — the Runs tab.
  *
  * Everything here is scoped to a user, because a run holds whatever the agent read: the
