@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getOwnedAgent } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 import { inngest } from "@/lib/inngest/client";
+import { rateLimit } from "@/lib/rate-limit";
 import { isValidTimezone, validateSchedule } from "@/lib/schedule/cron";
 import {
   DELIVERY_CHANNELS,
@@ -177,6 +178,10 @@ export async function runTaskNow(taskId: string): Promise<TaskActionResult> {
 
   const task = await getOwnedTask(user.id, taskId);
   if (!task) return { error: "Task not found." };
+
+  // Each press is a full background run; the daily cap (D45) still applies on top.
+  const limited = await rateLimit(user.id, "runNowPerMinute");
+  if (!limited.ok) return { error: limited.error };
 
   try {
     await inngest.send({

@@ -102,11 +102,16 @@ export default function VmCard({ agentId, ready, initial, nudge, steps = [] }: P
    * this page makes are logged by `act` with their timings.
    */
   const current = useRef(initial.status);
+  const [error, setError] = useState<string | null>(initial.error);
+  /** This month's VM time against the plan; kept from the last reading that had it. */
+  const [budget, setBudget] = useState(initial.budget ?? null);
   const setVm = useCallback(
     (next: SandboxView, external = false) => {
       const before = current.current;
       current.current = next.status;
       setVmState(next);
+      if (next.budget) setBudget(next.budget);
+      if (next.error && external) setError(next.error);
       if (!external || before === next.status) return;
       if (next.status === "running" && before !== "starting") note("info", "VM started (by the agent or another tab)");
       else if (next.status === "running") note("ok", "✓ Running");
@@ -120,7 +125,6 @@ export default function VmCard({ agentId, ready, initial, nudge, steps = [] }: P
 
   const [stats, setStats] = useState<SandboxStats | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(initial.error);
   /**
    * Delete removes the VM and its files, so it asks first, in a row that stays until
    * answered. (A button that changed its own label and quietly reverted read as "nothing
@@ -363,6 +367,28 @@ export default function VmCard({ agentId, ready, initial, nudge, steps = [] }: P
           Stops by itself, keeping its files, after {pausesIn <= 1 ? "about a minute" : `${pausesIn} minutes`} without use.
         </p>
       ) : null}
+
+      {/* The plan's monthly VM time (lib/vm-usage.ts): the cap shouldn't be a surprise. */}
+      {ready && budget && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between text-caption text-run-panel-muted">
+            <span>VM time this month</span>
+            <span className="font-mono tabular-nums">
+              {Math.min(Math.round(budget.usedSeconds / 60), Math.round(budget.allowanceSeconds / 60))} of{" "}
+              {Math.round(budget.allowanceSeconds / 60)} min
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-border dark:bg-white/10">
+            <div
+              className={cn(
+                "h-full rounded-full",
+                budget.usedSeconds >= budget.allowanceSeconds ? "bg-destructive" : "bg-brand-fill",
+              )}
+              style={{ width: `${Math.min(100, (budget.usedSeconds / Math.max(1, budget.allowanceSeconds)) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {error && (
         <p role="alert" className="flex items-start gap-2 text-caption text-destructive dark:text-[#F87171]">

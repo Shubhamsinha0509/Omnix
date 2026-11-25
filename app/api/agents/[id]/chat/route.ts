@@ -11,6 +11,7 @@ import {
 } from "@/lib/agents";
 import { hasModelKey } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 const MAX_MESSAGE = 8000;
 const HISTORY_LIMIT = 40; // most recent messages sent to the model as context
@@ -46,6 +47,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // The agent must belong to the signed-in user.
   const agent = await getOwnedAgent(user.id, agentId);
   if (!agent) return jsonError("Agent not found.", 404);
+
+  // Every message is a model turn that costs money: per minute, then per day.
+  for (const limit of ["chatPerMinute", "chatPerDay"] as const) {
+    const checked = await rateLimit(user.id, limit);
+    if (!checked.ok) {
+      return Response.json(
+        { error: checked.error },
+        { status: 429, headers: { "Retry-After": String(checked.retryAfterSeconds) } },
+      );
+    }
+  }
 
   // Continue the given conversation, or start a new one — either way claiming it, so only
   // one turn at a time runs in it. Claiming is a single conditional UPDATE, so two

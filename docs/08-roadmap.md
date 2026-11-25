@@ -187,7 +187,7 @@ back, but the fallback has only been exercised as far as the auth wall.
 - [x] Tools: `sandbox.run_code` (python, bash), `sandbox.write_file` / `read_file` / `list_files`, `sandbox.open_browser` (D52). Off by default; switched on per agent in the Tools tab. Verified live by calling each tool against a real VM, and in a real chat on 2026-11-24 (cody wrote Python, asked for approval, ran it and read its result file back). Code runs are also shown in a terminal window on the VM's screen
 - [x] Runtime toggle in agent settings; VM status indicator. The Isolated VM switch in Settings turns all VM tools on or off, with "Run code without asking" (D53); status and controls are in the chat's run panel (`VmCard`). Checked in the app on 2026-11-24
 - [x] VM know-how in the system prompt, a folder per scheduled task, and a warning on tasks that would wait for approval (D53). Not yet exercised by a model: the free OpenRouter quota ran out
-- [ ] VM usage tracked per run
+- [ ] VM usage tracked per run (per user and month is built, D55: `vm_usage`, enforced against the plan; not yet attributed to individual runs)
 
 ## Phase 7 — Ready to launch
 

@@ -5,6 +5,7 @@ import { resumeAgent } from "@/lib/agent/runner";
 import { claimConversation, getOwnedAgent, releaseConversation } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 import { inngest } from "@/lib/inngest/client";
+import { rateLimit } from "@/lib/rate-limit";
 
 const jsonError = (error: string, status: number, extra?: Record<string, unknown>) =>
   Response.json({ error, ...extra }, { status });
@@ -30,6 +31,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const user = await getCurrentUser();
   if (!user) return jsonError("Please sign in again.", 401);
+
+  // A decision resumes the agent's turn, which calls the model again.
+  const limited = await rateLimit(user.id, "decisionPerMinute");
+  if (!limited.ok) return jsonError(limited.error, 429);
 
   const body = (await request.json().catch(() => null)) as { decision?: unknown } | null;
   const decision =

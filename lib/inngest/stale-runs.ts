@@ -1,4 +1,5 @@
 import { closeStaleRuns } from "@/lib/agent/runs";
+import { enforceVmCaps } from "@/lib/sandbox";
 import { inngest } from "./client";
 
 /**
@@ -11,6 +12,8 @@ export const staleRunSweep = inngest.createFunction(
   { cron: "*/10 * * * *" },
   async ({ step }) => {
     const closed = await step.run("close-stale-runs", () => closeStaleRuns());
-    return { closed };
+    // VMs past their owner's monthly allowance stop, keeping their files (lib/vm-usage.ts).
+    const vmsStopped = await step.run("enforce-vm-caps", () => enforceVmCaps());
+    return { closed, vmsStopped };
   },
 );

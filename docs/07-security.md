@@ -120,7 +120,8 @@ content.
 
 ## Abuse and cost
 
-- Per-user limits: messages per minute, tokens per day, tool calls per run, VM minutes per month.
+- **Built (D55):** per-user request limits — 10 chat messages a minute and 300 a day, 20 approval decisions, 20 VM actions and 5 Run-now presses a minute (`lib/rate-limit.ts`, counted in Postgres so they hold across instances) — and the plan's monthly VM time, enforced at start, on every VM tool call, by E2B's own timer and by the 10-minute sweep (`lib/vm-usage.ts`).
+- Still open: the plan's monthly **token** allowance and agent/task counts are shown but not enforced; tool calls per run are capped by the runner (`LIMITS`).
 - Input size limits (chat messages are capped at 8,000 characters today).
 
 ## Google verification
@@ -150,7 +151,7 @@ Other providers (Slack App Directory, Atlassian, Notion) have their own review p
 - [ ] Inngest signing key configured
 - [x] Token encryption in place
 - [x] Approvals on for all write/destructive tools by default
-- [ ] Per-user rate and usage limits (partly: D45 caps unattended runs)
+- [ ] Per-user rate and usage limits (mostly: D45 caps unattended runs, D55 rate limits and VM time; token and agent-count allowances still open)
 - [x] Retention for run contents decided and running (D43)
 - [ ] Privacy policy and terms
 - [ ] Google verification started (if Gmail is offered publicly)
