@@ -58,8 +58,8 @@ export const MOCK_INBOX_ITEMS = (agent: { id: string; name: string; avatarSeed: 
         label: "Sending email",
         summary: `${agent.name} wants to send an email`,
         details: [
-          { label: "To", value: "Outskill (Zoom)" },
-          { label: "Message", value: "Thanks for the reminder. See you at 6:55 PM." },
+          { label: "To", value: "events@brightloop.example" },
+          { label: "Message", value: "Thanks for the reminder. See you at 6:30 PM." },
         ],
         expiresAt: at(-60 * 24),
         resumable: true,
@@ -71,7 +71,8 @@ export const MOCK_INBOX_ITEMS = (agent: { id: string; name: string; avatarSeed: 
       id: "sample-digest",
       kind: "task_result" as const,
       title: "Morning inbox digest",
-      body: "5 new emails since yesterday. All unread. Two were the same Outskill thread, so they're listed once.\n\n| From | Subject | Time |\n| --- | --- | --- |\n| Outskill (Zoom) | Claude Code 101 webinar: reminder | 12:26 |\n| Nate Herk | Newsletter teaser from AI Automation Society | 15:04 |\n| Zomato | Promo: order food instead of cooking | 11:43 |",
+      // Invented senders: sample data must never be anyone's real inbox.
+      body: "5 new emails since yesterday. All unread. Two were the same Brightloop thread, so they're listed once.\n\n| From | Subject | Time |\n| --- | --- | --- |\n| Brightloop Events | Product workshop: reminder | 12:26 |\n| Northwind Weekly | This week's newsletter | 15:04 |\n| Kestrel Foods | Promo: 20% off lunch | 11:43 |",
       unread: true,
       createdAt: at(90),
       approval: null,

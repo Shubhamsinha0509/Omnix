@@ -16,18 +16,21 @@ import { AgentAvatar } from "@/components/custom/workspace/AgentAvatar";
 import { ModelChip, SuggestionChip } from "@/components/custom/design/Chips";
 import type { SidebarAgent } from "@/components/custom/shell/AppSidebar";
 
-const SUGGESTIONS = [
-  "Summarize my unread email",
-  "Draft a reply to Outskill",
-  "Build a research agent for AI news",
-  "Plan my study schedule",
-];
-
 /**
- * "Ask savvyy anything…" (03-home): pick an agent, write, and the message opens a new chat
- * with that agent and sends there — the chat page picks it up from `?prompt=`.
+ * "Ask <agent> anything…" (03-home): pick an agent, write, and the message opens a new chat
+ * with that agent and sends there — the chat page picks it up from `?prompt=`. The chips
+ * under it are the picked agent's own starters (lib/agent-guide.ts).
  */
-export function HomeComposer({ agents, model }: { agents: SidebarAgent[]; model: { id: string; label: string } }) {
+export function HomeComposer({
+  agents,
+  starters,
+  model,
+}: {
+  agents: SidebarAgent[];
+  /** Each agent's chat starters, by agent id. */
+  starters: Record<string, string[]>;
+  model: { id: string; label: string };
+}) {
   const router = useRouter();
   const [agentId, setAgentId] = useState(agents[0]?.id ?? null);
   const [text, setText] = useState("");
@@ -111,7 +114,7 @@ export function HomeComposer({ agents, model }: { agents: SidebarAgent[]; model:
       </form>
 
       <div className="flex flex-wrap gap-2">
-        {SUGGESTIONS.map((suggestion) => (
+        {(agent ? (starters[agent.id] ?? []) : []).map((suggestion) => (
           <SuggestionChip
             key={suggestion}
             onClick={() => {

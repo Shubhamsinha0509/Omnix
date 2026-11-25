@@ -7,6 +7,8 @@ import { buildRunRows } from "@/components/custom/workspace/RunTimeline";
 import { conversations, db, messages, runs } from "@/db";
 import { listPendingForConversation } from "@/lib/agent/approvals";
 import { getRunDetail } from "@/lib/agent/runs";
+import { agentFacts } from "@/lib/agent-facts";
+import { setupFor, suggestionsFor } from "@/lib/agent-guide";
 import { CHAT_MODEL, hasModelKey } from "@/lib/ai";
 import { modelLabel } from "@/lib/format";
 import type { ConfigTab } from "@/components/custom/workspace/AgentConfigPanel";
@@ -91,6 +93,9 @@ export default async function AgentPage({ params, searchParams }: Props) {
       ])
     : [[], [], []];
 
+  // What to suggest for this agent: chat starters, and the setup its job still needs.
+  const facts = agentFacts(agent, { tools, connections, tasks });
+
   // That chat's most recent run, for the run panel: so its steps are still there after a
   // reload or when the chat is reopened. Only what the panel draws goes to the browser;
   // the payloads stay on the runs page.
@@ -148,6 +153,8 @@ export default async function AgentPage({ params, searchParams }: Props) {
       initialTab={initialTab}
       vm={{ ready: hasSandboxKey(), initial: vm }}
       savedRun={savedRun}
+      starters={suggestionsFor(facts)}
+      setup={setupFor(facts, agent.id)}
     />
   );
 }
