@@ -1,0 +1,539 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Omnix Live Demo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* 01-landing, plus a Pricing link in the menu and a pricing section before the footer. */
+body{margin:0;background:#F7F8FC}
+[hidden]{display:none!important}
+.omx{--bg:#F7F8FC;--surface:#FFFFFF;--muted:#F1F2F8;--glass:rgba(255,255,255,.84);--fg:#14162A;--fg2:#646A85;--fg3:#8C92AC;--onp:#FFFFFF;--primary:#14162A;--accent:#EEF0FF;--accent-fg:#4338CA;--brand:#6366F1;--brand-text:#4F46E5;--brand-fill:#4F46E5;--border:#E7E9F2;--border2:#D7DAE8;--ok:#16A34A;--ok-text:#15803D;--warn:#F59E0B;--warn-bg:#FEF3C7;--warn-text:#B45309;--danger:#DC2626;--run:#14162A;--run2:#1F2236;--run-fg:#F1F2F8;--run-mut:#9AA0B8;--wash1:rgba(124,131,245,.22);--wash2:rgba(165,171,251,.24);--sh-xs:0 1px 2px rgba(20,22,42,.05);--sh-sm:0 1px 2px rgba(20,22,42,.04),0 2px 8px -2px rgba(79,70,229,.08);--sh-md:0 1px 3px rgba(20,22,42,.05),0 8px 24px -6px rgba(79,70,229,.14);--sh-lg:0 2px 6px rgba(20,22,42,.06),0 24px 48px -12px rgba(79,70,229,.22);font-family:Figtree,system-ui,sans-serif;color:var(--fg);background:var(--bg);font-size:14px;line-height:22px;min-height:100vh;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+.omx.dark{--bg:#0C0D1C;--surface:#14162A;--muted:#1F2236;--glass:rgba(20,22,42,.86);--fg:#F7F8FC;--fg2:#B9BED3;--fg3:#8C92AC;--onp:#14162A;--primary:#F7F8FC;--accent:rgba(99,102,241,.18);--accent-fg:#C7CBFE;--brand:#7C83F5;--brand-text:#A5ABFB;--brand-fill:#6366F1;--border:#1F2236;--border2:#33374D;--ok:#22C55E;--ok-text:#22C55E;--warn-bg:rgba(245,158,11,.16);--warn-text:#FCD34D;--danger:#EF4444;--run:#08091A;--run2:#1F2236;--wash1:rgba(99,102,241,.22);--wash2:rgba(67,56,202,.20);--sh-xs:0 1px 2px rgba(0,0,0,.3);--sh-sm:0 1px 2px rgba(0,0,0,.3),0 2px 8px -2px rgba(0,0,0,.4);--sh-md:0 1px 3px rgba(0,0,0,.35),0 8px 24px -6px rgba(0,0,0,.5);--sh-lg:0 2px 6px rgba(0,0,0,.4),0 24px 48px -12px rgba(0,0,0,.6)}
+.omx *{box-sizing:border-box}
+.omx p,.omx h1,.omx h2,.omx h3{margin:0}
+.omx a{color:var(--brand-text);text-decoration:none}
+.omx a:hover{text-decoration:underline}
+.omx button{font-family:inherit}
+.omx :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.dsp{font-family:'Bricolage Grotesque',Figtree,sans-serif;font-weight:700;letter-spacing:-.02em}
+.h0{font-family:'Bricolage Grotesque',Figtree,sans-serif;font-weight:600;font-size:40px;line-height:44px;letter-spacing:-.02em}
+.h1{font-family:'Bricolage Grotesque',Figtree,sans-serif;font-weight:600;font-size:28px;line-height:34px;letter-spacing:-.015em}
+.h2{font-size:20px;line-height:28px;font-weight:600;letter-spacing:-.005em}
+.h3{font-size:16px;line-height:24px;font-weight:600}
+.lg{font-size:16px;line-height:26px}
+.s{font-size:13px;line-height:20px}
+.cap{font-size:12px;line-height:16px;font-weight:500}
+.sub{color:var(--fg2)}
+.med{font-weight:500}.semi{font-weight:600}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:16px}
+.idchip{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:16px;background:var(--muted);color:var(--fg2);padding:2px 6px;border-radius:6px}
+.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.i16{width:16px;height:16px}.i14{width:14px;height:14px}.i20{width:20px;height:20px}.i22{width:22px;height:22px}
+.row{display:flex;align-items:center;gap:12px}
+.col{display:flex;flex-direction:column}
+.grow{flex:1 1 0;min-width:0}
+.app{display:flex;min-height:100vh}
+.sb{width:256px;flex:0 0 256px;background:var(--surface);border-right:1px solid var(--border);padding:20px 16px;display:flex;flex-direction:column;gap:4px}
+.nav{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:12px;color:var(--fg);font-weight:500;text-decoration:none}
+.nav .i{color:var(--fg2)}
+.nav.on{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.nav.on .i{color:var(--brand)}
+.kbd{margin-left:auto;font-size:12px;line-height:16px;font-weight:500;color:var(--fg2);background:var(--muted);padding:2px 8px;border-radius:999px}
+.count{margin-left:auto;font-size:12px;line-height:16px;font-weight:600;color:#fff;background:var(--brand-fill);padding:2px 8px;border-radius:999px}
+.label{font-size:12px;line-height:16px;font-weight:500;color:var(--fg2);padding:20px 12px 8px}
+.topbar{display:none;height:56px;align-items:center;gap:12px;padding:0 8px 0 4px;background:var(--surface);border-bottom:1px solid var(--border)}
+.main{flex:1 1 0;min-width:0;position:relative;overflow:hidden}
+.wash{position:absolute;left:0;right:0;top:-160px;height:560px;background:radial-gradient(45% 60% at 22% 40%,var(--wash1),transparent 70%),radial-gradient(40% 55% at 82% 25%,var(--wash2),transparent 70%);pointer-events:none}
+.wrap{position:relative;max-width:1008px;margin:0 auto;padding:48px 24px 64px;display:flex;flex-direction:column;gap:24px}
+.wrap.narrow{max-width:768px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--sh-sm)}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 16px;border-radius:12px;font-weight:600;font-size:14px;line-height:1;border:1px solid transparent;cursor:pointer;text-decoration:none!important;white-space:nowrap;background:none;color:var(--fg)}
+.btn.sm{height:36px;padding:0 12px;font-weight:500}
+.bp{background:var(--primary);color:var(--onp)}
+.bs{background:var(--surface);color:var(--fg);border-color:var(--border2);box-shadow:var(--sh-xs)}
+.bb{background:var(--brand-fill);color:#fff}
+.bg{color:var(--fg2)}
+.bd{color:var(--danger);border-color:var(--danger);background:transparent}
+.ibtn{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;border:0;background:none;color:var(--fg2);cursor:pointer;flex:none}
+.ibtn.on{background:var(--accent);color:var(--brand)}
+.send{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;border:0;background:var(--brand-fill);color:#fff;flex:none}
+.chip{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:999px;background:var(--surface);border:1px solid var(--border2);color:var(--fg);font-size:14px;box-shadow:var(--sh-xs);white-space:nowrap}
+.chip .i{color:var(--brand)}
+.pill{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:999px;background:var(--surface);border:1px solid var(--border2);font-weight:500;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;line-height:16px;font-weight:500;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.b-ok{color:var(--ok-text);padding-left:0}
+.b-run{background:var(--accent);color:var(--accent-fg)}
+.b-pause{color:var(--warn-text);padding-left:0}
+.b-warn{background:var(--warn-bg);color:var(--warn-text)}
+.b-neutral{background:var(--muted);color:var(--fg2)}
+.b-err{background:rgba(220,38,38,.1);color:var(--danger)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.av{border-radius:50%;flex:none;display:block}
+.input{min-height:44px;border:1px solid var(--border2);border-radius:12px;background:var(--surface);padding:0 12px;display:flex;align-items:center;gap:8px;width:100%;color:var(--fg)}
+.ph{color:var(--fg2)}
+.field{display:flex;flex-direction:column;gap:6px}
+.textarea{border:1px solid var(--border2);border-radius:12px;background:var(--surface);padding:12px;min-height:128px;width:100%}
+.toggle{width:40px;height:24px;border-radius:999px;background:var(--border2);position:relative;flex:none;border:0;padding:0;cursor:pointer}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s cubic-bezier(.34,1.36,.64,1)}
+.toggle.on{background:var(--brand-fill)}
+.toggle.on::after{left:19px}
+.seg{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--muted)}
+.seg>span{flex:1 1 0;text-align:center;padding:6px 12px;border-radius:8px;color:var(--fg2);font-weight:500;white-space:nowrap}
+.seg>span.on{background:var(--surface);color:var(--fg);box-shadow:var(--sh-xs)}
+.glass{background:var(--glass);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border:1px solid var(--border);box-shadow:var(--sh-lg)}
+.divider{height:1px;background:var(--border);width:100%}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.acard{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--sh-sm);padding:20px;display:flex;flex-direction:column;gap:16px;min-height:212px}
+.acard .desc{color:var(--fg2);font-size:13px;line-height:20px;flex:1 1 auto}
+.run{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--accent);color:var(--brand);border:0;flex:none}
+.run.live{background:var(--brand-fill);color:#fff}
+.newcard{border:1.5px dashed var(--border2);border-radius:16px;min-height:212px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--fg);text-decoration:none!important}
+.plus{width:40px;height:40px;border-radius:50%;background:var(--accent);color:var(--brand);display:flex;align-items:center;justify-content:center}
+.list>*+*{border-top:1px solid var(--border)}
+.lrow{display:flex;align-items:center;gap:12px;padding:12px 16px;min-height:52px}
+.tool{display:flex;gap:12px;padding:12px 16px;align-items:flex-start}
+.tool .i{color:var(--fg2);margin-top:2px}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;line-height:20px}
+.tbl th{background:var(--muted);color:var(--fg2);font-weight:500;font-size:12px;text-align:left;padding:10px 12px}
+.tbl td{padding:10px 12px;border-top:1px solid var(--border);color:var(--fg2);vertical-align:top}
+.tbl td:first-child{color:var(--fg);font-weight:500}
+.tblbox{border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto;background:var(--surface)}
+.logo{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;flex:none}
+.meter{height:8px;border-radius:999px;background:var(--muted);overflow:hidden}
+.meter>span{display:block;height:100%;border-radius:999px;background:var(--brand-fill)}
+.runpanel{background:var(--run);color:var(--run-fg);border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:8px}
+.step{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px}
+.step.cur{background:var(--run2)}
+.ind{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+.ind.done{background:#22C55E;color:#08091A}
+.ind.pend{border:1.5px solid var(--run-mut)}
+.spin{width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(124,131,245,.25);border-top-color:#7C83F5;animation:omxspin 1s linear infinite}
+@keyframes omxspin{to{transform:rotate(360deg)} }
+.skel{height:10px;border-radius:999px;background:rgba(255,255,255,.08)}
+.drawer{width:400px;flex:0 0 400px;margin:12px 12px 12px 0;border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:20px;overflow:hidden}
+.tabs{display:flex;gap:4px;padding:4px;border-radius:12px;background:var(--muted)}
+.tab{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-radius:8px;color:var(--fg2);font-size:12px;line-height:16px;font-weight:500}
+.tab.on{background:var(--surface);color:var(--fg);box-shadow:var(--sh-xs)}
+.tab.on .i{color:var(--brand)}
+.bubble{background:var(--primary);color:var(--onp);padding:10px 16px;border-radius:20px 20px 8px 20px;max-width:70%}
+.check{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--border2);background:var(--surface);display:flex;align-items:center;justify-content:center;flex:none;color:#fff}
+.capbox{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;border:1px solid var(--border2);background:var(--surface);min-height:48px;font-weight:500}
+.capbox.on{border-color:var(--brand);background:var(--accent)}
+.capbox.on .check{background:var(--brand-fill);border-color:var(--brand-fill)}
+.menu{position:absolute;left:16px;bottom:72px;width:264px;border-radius:16px;padding:8px;z-index:5}
+.mi{display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border-radius:10px;color:var(--fg);font-weight:500}
+.mi .i{color:var(--fg2)}
+.mi:hover{background:var(--muted)}
+.ava{width:32px;height:32px;border-radius:50%;background:var(--brand-fill);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;flex:none}
+@media (max-width:767px){
+ .sb{display:none}
+ .topbar{display:flex}
+ .app{flex-direction:column}
+ .wrap{padding:24px 16px 48px;gap:20px}
+ .grid3,.grid2{grid-template-columns:minmax(0,1fr)}
+ .grid4{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .hide-m{display:none!important}
+ .stack-m{flex-direction:column!important;align-items:stretch!important}
+ .h0{font-size:32px;line-height:36px}
+ .drawer{position:absolute;inset:0;width:auto;margin:0;border-radius:0;z-index:6}
+ .menu{left:8px;right:8px;width:auto;bottom:auto;top:64px}
+}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}.toggle::after{transition:none} }
+/* Live demo (24): the app in a browser tab, playing a Job Searcher run on a loop. */
+.demo-wrap{position:relative;max-width:1180px;margin:0 auto;padding:8px 24px 24px}
+.dwin{--d-bg:var(--bg);--d-surface:var(--surface);--d-run:#FFFFFF;--d-run2:#F1F2F8;--d-run-fg:#14162A;--d-run-mut:#646A85;--d-line:#E7E9F2;--d-screen:#F1F2F8;--d-ok:#15803D;--d-ok-bg:rgba(22,163,74,.1);--d-brand:#4338CA;--d-brand-bg:#EEF0FF;--d-warn:#B45309;
+  border-radius:16px;overflow:hidden;background:var(--surface);border:1px solid var(--border2);box-shadow:var(--sh-lg),0 40px 80px -24px rgba(79,70,229,.28);text-align:left;font-size:13px;line-height:20px}
+.omx.dark .dwin{--d-run:#08091A;--d-run2:#1F2236;--d-run-fg:#F1F2F8;--d-run-mut:#9AA0B8;--d-line:rgba(255,255,255,.08);--d-screen:#08091A;--d-ok:#4ADE80;--d-ok-bg:rgba(34,197,94,.15);--d-brand:#C7CBFE;--d-brand-bg:rgba(124,131,245,.18);--d-warn:#FCD34D;box-shadow:0 2px 6px rgba(0,0,0,.4),0 40px 80px -24px rgba(0,0,0,.7)}
+/* Browser chrome: one tab, centred window */
+.dtabs{display:flex;align-items:flex-end;gap:10px;padding:10px 14px 0;background:var(--muted);border-bottom:1px solid var(--border)}
+.dtabs .dots{display:flex;gap:6px;padding:0 6px 12px 2px}
+.dtabs .dots i{width:11px;height:11px;border-radius:50%;display:block;background:var(--border2)}
+.dtab{display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border-radius:10px 10px 0 0;background:var(--surface);border:1px solid var(--border);border-bottom:0;margin-bottom:-1px;font-size:12px;font-weight:500;color:var(--fg);min-width:0;max-width:260px}
+.dtab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dtab .x{color:var(--fg3);margin-left:6px}
+.dtabs .dplus{color:var(--fg3);padding:0 4px 10px}
+.durl{display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--border);color:var(--fg2)}
+.durl .bar{flex:1;min-width:0;height:28px;border-radius:999px;background:var(--muted);display:flex;align-items:center;gap:8px;padding:0 12px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;white-space:nowrap;overflow:hidden}
+/* The app inside */
+.dapp{display:grid;grid-template-columns:188px minmax(0,1fr) 336px;height:600px;background:var(--d-bg)}
+.dsb{background:var(--surface);border-right:1px solid var(--border);padding:14px 12px;display:flex;flex-direction:column;gap:2px;min-height:0}
+.dsb .new{height:32px;border-radius:9px;background:var(--primary);color:var(--onp);display:flex;align-items:center;justify-content:center;gap:6px;font-weight:600;font-size:12px;margin:6px 0 10px}
+.dnav{display:flex;align-items:center;gap:9px;height:30px;padding:0 9px;border-radius:9px;color:var(--fg);font-weight:500;font-size:12.5px}
+.dnav .i{width:15px;height:15px;color:var(--fg2)}
+.dnav.on{background:var(--accent);color:var(--accent-fg);font-weight:600}
+.dlab{font-size:11px;color:var(--fg2);padding:12px 9px 6px;font-weight:500}
+.dav{width:20px;height:20px;border-radius:50%;flex:none}
+.dcount{margin-left:auto;font-size:10.5px;font-weight:600;color:#fff;background:var(--brand-fill);padding:0 7px;border-radius:999px;line-height:17px}
+.dchat{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--border)}
+.dhead{height:52px;flex:none;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--border)}
+.dpill{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:999px;border:1px solid var(--border2);font-size:11.5px;font-weight:500;background:var(--surface)}
+.dmsgs{flex:1;min-height:0;overflow:hidden;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.dbubble{align-self:flex-end;max-width:82%;background:var(--primary);color:var(--onp);padding:8px 13px;border-radius:16px 16px 6px 16px}
+.dreply{display:flex;gap:10px;align-items:flex-start}
+.dreply .body{display:flex;flex-direction:column;gap:9px;min-width:0;flex:1}
+.dtool{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border-radius:999px;background:var(--muted);color:var(--fg2);font-size:12px}
+.djobs{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.djobs li{display:flex;gap:8px;align-items:baseline}
+.djobs b{font-weight:600}
+.dfile{align-self:flex-start;display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:9px;border:1px solid var(--border);background:var(--surface);font-weight:500;box-shadow:var(--sh-xs)}
+.dfile .i{color:var(--brand);width:15px;height:15px}
+.dcomp{flex:none;margin:0 16px 14px;height:44px;border-radius:14px;border:1px solid var(--border2);background:var(--surface);display:flex;align-items:center;padding:0 6px 0 14px;color:var(--fg2);gap:8px}
+.dsend{margin-left:auto;width:32px;height:32px;border-radius:10px;background:var(--brand-fill);opacity:.55;display:flex;align-items:center;justify-content:center;color:#fff}
+/* Run panel */
+.drun{background:var(--d-run);color:var(--d-run-fg);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.drhead{height:52px;flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;border-bottom:1px solid var(--d-line)}
+.dbadge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:1px 8px;border-radius:999px;background:var(--d-brand-bg);color:var(--d-brand)}
+.dbadge .dot{width:7px;height:7px;border-radius:50%;background:#7C83F5}
+.dbadge.done{background:var(--d-ok-bg);color:var(--d-ok)}
+.dbadge.done .dot{background:#22C55E}
+.drbody{padding:12px 14px;display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
+.dvm{background:var(--d-run2);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:9px}
+.dvmicon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--d-brand-bg);color:var(--d-brand);flex:none}
+.dvm.on .dvmicon{background:var(--d-ok-bg);color:var(--d-ok)}
+.dvstat{font-size:11.5px;font-weight:500;display:inline-flex;align-items:center;gap:5px;color:var(--d-brand)}
+.dvm.on .dvstat{color:var(--d-ok)}
+.dvstat .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+.dscreen{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;border:1px solid var(--d-line);background:linear-gradient(135deg,#2B2F55,#1B1E38)}
+.dscreen .msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;color:#fff;font-size:12px;font-weight:500;background:rgba(8,9,26,.55)}
+.dterm{position:absolute;left:5%;top:7%;right:5%;bottom:13%;border-radius:6px;background:#0B0C17;box-shadow:0 6px 18px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden;transition:opacity .3s}
+.dterm .tb{height:15px;flex:none;background:#1F2236;display:flex;align-items:center;justify-content:center;font-size:8px;color:#B9BED3;font-weight:600}
+.dterm pre{margin:0;padding:6px 8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:8.6px;line-height:12px;color:#D7DAE8;white-space:pre-wrap;overflow:hidden}
+.dterm .c{color:#FACC15}.dterm .g{color:#4ADE80}.dterm .h{color:#67E8F9}
+.dtaskbar{position:absolute;left:0;right:0;bottom:0;height:11%;background:rgba(8,9,26,.75);display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:7.5px;color:#B9BED3}
+.dstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.dstat{background:var(--d-run);border:1px solid var(--d-line);border-radius:9px;padding:5px 8px;display:flex;flex-direction:column}
+.dstat .k{font-size:10px;color:var(--d-run-mut)}
+.dstat .v{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-variant-numeric:tabular-nums}
+.dsteps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.dstep{display:flex;align-items:center;gap:9px;padding:5px 9px;border-radius:9px;transition:background .25s}
+.dstep.cur{background:var(--d-run2)}
+.dstep .ind{width:17px;height:17px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--d-run-mut)}
+.dstep.done .ind{background:#22C55E;border-color:#22C55E;color:#08091A}
+.dstep.cur .ind{border:0}
+.dstep .t{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--d-run-mut);margin-left:auto;font-variant-numeric:tabular-nums}
+.dstep.pend .l{color:var(--d-run-mut)}
+.dspin{width:14px;height:14px;border-radius:50%;border:2.2px solid rgba(124,131,245,.25);border-top-color:#7C83F5;animation:omxspin 1s linear infinite;flex:none}
+.dfade{transition:opacity .35s,transform .35s}
+.dhide{opacity:0;transform:translateY(6px)}
+.demo-cap{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin-top:18px;color:var(--fg2);font-size:13px}
+.demo-cap span{display:inline-flex;align-items:center;gap:7px}
+.demo-cap .i{width:15px;height:15px;color:var(--brand)}
+@media (max-width:1060px){.dapp{grid-template-columns:minmax(0,1fr) 320px}.dsb{display:none}}
+@media (max-width:760px){.dapp{grid-template-columns:minmax(0,1fr);height:auto}.dchat{display:none}.dtab{max-width:180px}}
+@media (prefers-reduced-motion:reduce){.dspin{animation:none}.dfade,.dstep,.dterm{transition:none}}
+
+/* Pricing (new) */
+.pricing{max-width:1080px;margin:0 auto;padding:32px 24px 96px;display:flex;flex-direction:column;align-items:center;gap:28px}
+.billing{display:inline-flex;gap:4px;padding:4px;border-radius:999px;background:var(--muted)}
+.billing button{border:0;background:none;cursor:pointer;height:36px;padding:0 16px;border-radius:999px;color:var(--fg2);font-weight:500;font-size:14px;display:inline-flex;align-items:center;gap:8px}
+.billing button.on{background:var(--surface);color:var(--fg);box-shadow:var(--sh-xs)}
+.save{font-size:11px;font-weight:600;letter-spacing:.02em;padding:2px 8px;border-radius:999px;background:var(--accent);color:var(--accent-fg)}
+.plans{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;width:100%;align-items:stretch}
+.plan{background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--sh-sm);padding:28px;display:flex;flex-direction:column;gap:20px;position:relative}
+.plan.pop{border:1.5px solid var(--brand);box-shadow:var(--sh-lg)}
+.plan .tag{position:absolute;top:-12px;left:28px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--brand-fill);color:#fff}
+.price{display:flex;align-items:baseline;gap:6px}
+.price .amt{font-family:'Bricolage Grotesque',Figtree,sans-serif;font-weight:700;font-size:44px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.price .per{color:var(--fg2);font-size:14px}
+.billnote{font-size:12px;line-height:16px;color:var(--fg2);min-height:16px}
+.limits{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.limit{background:var(--muted);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.limit .v{font-weight:600;font-variant-numeric:tabular-nums}
+.limit .k{font-size:12px;line-height:16px;color:var(--fg2)}
+.feats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.feats li{display:flex;gap:10px;align-items:flex-start}
+.feats .i{color:var(--ok);margin-top:2px}
+.feats li.no{color:var(--fg3)}
+.feats li.no .i{color:var(--fg3)}
+.plan .btn{width:100%;height:44px}
+.bb{background:var(--brand-fill);color:#fff}
+/* Buttons that are links: the page's link colour must not override the button's own. */
+.omx a.btn.bp{color:var(--onp)}
+.omx a.btn.bb{color:#fff}
+.omx a.btn.bs{color:var(--fg)}
+.vmnote{display:flex;gap:12px;align-items:flex-start;max-width:720px;padding:14px 18px;border-radius:16px;background:var(--surface);border:1px solid var(--border)}
+.vmnote .i{color:var(--brand);margin-top:2px}
+.faq{width:100%;max-width:720px;display:flex;flex-direction:column}
+.faq details{border-bottom:1px solid var(--border);padding:14px 4px}
+.faq summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";color:var(--fg2);font-weight:500}
+.faq details[open] summary::after{content:"–"}
+.faq p{margin-top:8px;color:var(--fg2)}
+@media (max-width:900px){.plans{grid-template-columns:minmax(0,1fr);max-width:440px}}
+</style>
+</head>
+<body>
+
+<div class="omx">
+<div class="main" style="min-height: 100vh">
+<div class="wash" style="height: 820px; top: -120px"></div>
+<header class="glass" style="position: relative; max-width: 1040px; margin: 20px auto 0; border-radius: 20px; padding: 10px 12px 10px 20px; display: flex; align-items: center; gap: 24px; box-shadow: var(--sh-sm)">
+<a href="#" class="row" style="gap: 10px; color: var(--fg); text-decoration: none" aria-label="Omnix home"><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C83F5"/><stop offset="1" stop-color="#4338CA"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><circle cx="16" cy="16" r="6.5" fill="none" stroke="#fff" stroke-width="3"/><ellipse cx="16" cy="16" rx="12" ry="4" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1.5" transform="rotate(-25 16 16)"/></svg><span class="h2" style="font-size: 20px">Omnix</span></a>
+<nav class="row hide-m" style="gap: 28px; margin: 0 auto" aria-label="Site"><a href="#features" style="color: var(--fg2)">Features</a><a href="#how" style="color: var(--fg2)">How it works</a><a href="#demo" style="color: var(--fg2)">Live demo</a><a href="#pricing" style="color: var(--fg2)">Pricing</a><a href="#docs" style="color: var(--fg2)">Docs</a></nav>
+<div class="row" style="gap: 8px; margin-left: auto"><a class="btn bg hide-m" href="#">Sign in</a><a class="btn bp" href="#">Launch app</a></div>
+</header>
+<section style="position: relative; max-width: 1120px; margin: 0 auto; padding: 96px 24px 40px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 24px">
+<div class="hide-m" style="position: absolute; left: 0; top: 260px"><svg class="av" width="150" height="150" viewBox="0 0 96 96" aria-hidden="true"><g transform="translate(0 4)"><path d="M24 76c-7 0-9-11-2-15-4-11 6-19 13-13 2-11 17-13 21-4 9-6 19 3 15 11 8 3 8 15 0 17-3 6-40 6-47 4z" fill="#A88BC9"/><circle cx="40" cy="52" r="7" fill="#fff"/><circle cx="57" cy="50" r="7" fill="#fff"/><circle cx="41" cy="50" r="3" fill="#1F2236"/><circle cx="58" cy="48" r="3" fill="#1F2236"/><circle cx="48" cy="64" r="2.5" fill="#1F2236"/></g></svg></div>
+<div class="hide-m" style="position: absolute; right: 0; top: 230px"><svg class="av" width="150" height="150" viewBox="0 0 96 96" aria-hidden="true"><g transform="translate(0 4)"><path d="M30 84V48c0-14 8-22 18-22s18 8 18 22v36l-6-5-6 5-6-5-6 5-6-5z" fill="#7FB3A3"/><circle cx="62" cy="24" r="5" fill="none" stroke="#7FB3A3" stroke-width="3"/><circle cx="41" cy="50" r="6.5" fill="#fff"/><circle cx="56" cy="50" r="6.5" fill="#fff"/><circle cx="42" cy="51" r="3" fill="#1F2236"/><circle cx="57" cy="51" r="3" fill="#1F2236"/><path d="M42 61q6 6 12 0z" fill="#1F2236"/></g></svg></div>
+<h1 class="dsp" style="font-size: clamp(40px, 7vw, 76px); line-height: 1.04; max-width: 920px">Create, Connect &amp; Automate AI Agents Instantly</h1>
+<p class="lg sub" style="max-width: 600px">Build personal AI agents, connect them to Gmail, Slack, Notion and Jira, and let them work for you: on demand, on a schedule, or on their own virtual machine.</p>
+<div class="row stack-m" style="gap: 12px; justify-content: center"><a class="btn bp" href="#" style="height: 48px; padding: 0 24px; font-size: 15px">Launch app</a><a class="btn bs" href="#how" style="height: 48px; padding: 0 24px; font-size: 15px">See how it works</a></div>
+</section>
+<section id="demo" class="demo-wrap" aria-label="Omnix running a task, live">
+<div class="dwin" role="img" aria-label="The Omnix app in a browser tab: Job Searcher starts its own virtual machine, runs code to find new full stack jobs, and replies with a list and a CSV file.">
+
+<div class="dtabs" aria-hidden="true">
+<div class="dots"><i></i><i></i><i></i></div>
+<div class="dtab"><svg width="14" height="14" viewBox="0 0 32 32"><rect width="32" height="32" rx="9" fill="#6366F1"/><circle cx="16" cy="16" r="6.5" fill="none" stroke="#fff" stroke-width="3"/></svg><span>Job Searcher · Omnix</span><svg class="i i14 x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></div>
+<span class="dplus">+</span>
+</div>
+<div class="durl" aria-hidden="true"><svg class="i i16" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><svg class="i i16" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5"/></svg><span class="bar"><svg class="i i14" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>omnix.app/workspace/agent/job-searcher</span></div>
+
+<div class="dapp" aria-hidden="true">
+<!-- Sidebar -->
+<aside class="dsb">
+<div class="row" style="gap: 8px; padding: 0 6px"><svg width="24" height="24" viewBox="0 0 32 32"><defs><linearGradient id="dlg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C83F5"/><stop offset="1" stop-color="#4338CA"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#dlg)"/><circle cx="16" cy="16" r="6.5" fill="none" stroke="#fff" stroke-width="3"/></svg><span class="semi" style="font-size: 15px">Omnix</span></div>
+<div class="new">+ Create new agent</div>
+<div class="dnav"><svg class="i" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home</div>
+<div class="dnav"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="3"/><path d="M12 8V4H8"/></svg>Agents</div>
+<div class="dnav"><svg class="i" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>Workspaces</div>
+<div class="dlab">Your agents</div>
+<div class="dnav on"><svg class="dav" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#DCE8F2"/><path d="M30 80V50c0-12 8-20 18-20s18 8 18 20v30z" fill="#7FA3C2"/><circle cx="48" cy="52" r="8" fill="#fff"/><circle cx="48" cy="53" r="4" fill="#1F2236"/></svg>Job Searcher</div>
+<div class="dnav"><svg class="dav" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#E5EEDC"/><path d="M24 80c-5 0-7-4-6-10 2-15 5-40 30-42 25 2 28 27 30 42 1 6-1 10-6 10z" fill="#8BAF6E"/><circle cx="40" cy="52" r="6" fill="#fff"/><circle cx="56" cy="52" r="6" fill="#fff"/></svg>savvyy</div>
+<div class="dnav"><svg class="dav" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#F6E3DA"/><path d="M28 82c-6 0-8-6-7-14 2-17 7-32 27-32s25 15 27 32c1 8-1 14-7 14z" fill="#D98C6A"/><circle cx="40" cy="56" r="6" fill="#fff"/><circle cx="56" cy="56" r="6" fill="#fff"/></svg>cody</div>
+<div style="flex: 1 1 auto"></div>
+<div class="dnav"><svg class="i" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Inbox<span class="dcount" id="d-inbox">3</span></div>
+<div class="dnav"><svg class="i" viewBox="0 0 24 24"><path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8z"/></svg>Integrations</div>
+</aside>
+
+<!-- Chat -->
+<section class="dchat">
+<div class="dhead"><svg class="dav" style="width: 26px; height: 26px" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#DCE8F2"/><path d="M30 80V50c0-12 8-20 18-20s18 8 18 20v30z" fill="#7FA3C2"/><circle cx="48" cy="52" r="8" fill="#fff"/><circle cx="48" cy="53" r="4" fill="#1F2236"/></svg><span class="semi grow">Job Searcher</span><span class="dpill"><span class="dot" style="background: var(--ok)"></span>DeepSeek V3.1</span></div>
+<div class="dmsgs">
+<p class="dbubble">Find new full stack developer jobs, remote or in India, and send me a CSV.</p>
+<div class="dreply dfade dhide" id="d-reply">
+<svg class="dav" style="width: 26px; height: 26px" viewBox="0 0 96 96"><circle cx="48" cy="48" r="48" fill="#DCE8F2"/><path d="M30 80V50c0-12 8-20 18-20s18 8 18 20v30z" fill="#7FA3C2"/><circle cx="48" cy="52" r="8" fill="#fff"/><circle cx="48" cy="53" r="4" fill="#1F2236"/></svg>
+<div class="body">
+<span class="dtool" id="d-tool"><span class="dspin" style="width: 12px; height: 12px" id="d-toolspin"></span><span id="d-tooltext">Running code in the VM…</span></span>
+<div class="col dfade dhide" style="gap: 9px" id="d-answer">
+<p><b>7 new full stack jobs</b> since yesterday. The 3 newest:</p>
+<ul class="djobs">
+<li>• <span><b>Senior Full Stack Engineer</b> · Northwind Labs · Remote</span></li>
+<li>• <span><b>Full Stack Developer (React, Node)</b> · Brightloop · Remote</span></li>
+<li>• <span><b>Full-Stack Engineer</b> · Kestrel Pay · Bengaluru</span></li>
+</ul>
+<span class="dfile"><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M12 12v6M9 15l3 3 3-3"/></svg>new_jobs_2026-11-25.csv</span>
+</div>
+</div>
+</div>
+</div>
+<div class="dcomp">Message Job Searcher…<span class="dsend"><svg class="i i16" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span></div>
+</section>
+
+<!-- Run panel -->
+<aside class="drun">
+<div class="drhead"><span class="semi">This run</span><span class="dbadge" id="d-badge"><span class="dot"></span><span id="d-badge-t">Live</span></span><span class="grow"></span><span class="mono" style="color: var(--d-run-mut)" id="d-clock">00:00:00</span></div>
+<div class="drbody">
+<div class="dvm" id="d-vm">
+<div class="row" style="gap: 10px">
+<span class="dvmicon"><svg class="i i16" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+<span class="col grow"><span class="semi" style="font-size: 13px">Isolated VM</span><span class="dvstat" id="d-vmstat"><span class="dot"></span><span id="d-vmstat-t">Starting…</span></span></span>
+<span class="mono" style="color: var(--d-run-mut); font-size: 11px" id="d-uptime"></span>
+</div>
+<div class="dscreen">
+<div class="dterm" id="d-term" style="opacity: 0"><div class="tb">Agent · python</div><pre id="d-pre"></pre></div>
+<div class="dtaskbar"><span>Firefox · Terminal</span><span>09:00</span></div>
+<div class="msg" id="d-screenmsg"><span class="dspin"></span>Starting the VM…</div>
+</div>
+<div class="dstats">
+<div class="dstat"><span class="k">CPU</span><span class="v" id="d-cpu">—</span></div>
+<div class="dstat"><span class="k">Memory</span><span class="v" id="d-mem">—</span></div>
+<div class="dstat"><span class="k">Disk</span><span class="v" id="d-disk">—</span></div>
+</div>
+</div>
+<div class="cap" style="color: var(--d-run-mut); padding: 2px 4px 0">Steps</div>
+<ol class="dsteps" id="d-steps">
+<li class="dstep pend"><span class="ind"></span><span class="l">Read its memory · 312 jobs sent before</span><span class="t">—</span></li>
+<li class="dstep pend"><span class="ind"></span><span class="l">Fetched 315 listings in its VM</span><span class="t">—</span></li>
+<li class="dstep pend"><span class="ind"></span><span class="l">Found 7 new full stack jobs</span><span class="t">—</span></li>
+<li class="dstep pend"><span class="ind"></span><span class="l">Shared new_jobs.csv</span><span class="t">—</span></li>
+<li class="dstep pend"><span class="ind"></span><span class="l">Wrote the reply</span><span class="t">—</span></li>
+</ol>
+</div>
+</aside>
+</div>
+</div>
+<div class="demo-cap">
+<span><svg class="i" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Its own virtual machine</span>
+<span><svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M12 7v5l4 2"/></svg>Remembers what it did last time</span>
+<span><svg class="i" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M12 12v6M9 15l3 3 3-3"/></svg>Hands you the files</span>
+</div>
+</section>
+<section id="how" style="max-width: 1040px; margin: 0 auto; padding: 64px 24px 96px; display: flex; flex-direction: column; gap: 32px">
+<h2 class="h0" style="text-align: center">From idea to working agent in three steps</h2>
+<div class="grid3"><div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 12px"><span class="dsp" style="font-size: 32px; line-height: 36px; color: var(--brand)">1</span><h3 class="h3">Create an agent</h3><p class="sub">Name it, pick a blob, and write what it should do in plain words.</p></div><div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 12px"><span class="dsp" style="font-size: 32px; line-height: 36px; color: var(--brand)">2</span><h3 class="h3">Connect your tools</h3><p class="sub">Gmail, Slack, Notion and Jira. You choose which actions it may take.</p></div><div class="card" style="padding: 24px; display: flex; flex-direction: column; gap: 12px"><span class="dsp" style="font-size: 32px; line-height: 36px; color: var(--brand)">3</span><h3 class="h3">Run it now or on a schedule</h3><p class="sub">Chat with it, or let it run each morning on its own VM and report back.</p></div></div>
+</section>
+<section id="pricing" class="pricing" aria-labelledby="pricing-title">
+<div class="col" style="align-items: center; gap: 12px; text-align: center">
+<h2 class="h0" id="pricing-title">Simple pricing</h2>
+<p class="lg sub" style="max-width: 560px">Start free. Upgrade when your agents do more: more of them, more often, and more time on their own VM.</p>
+</div>
+<div class="billing" role="group" aria-label="Billing period">
+<button type="button" class="on" id="bill-month" aria-pressed="true">Monthly</button>
+<button type="button" id="bill-year" aria-pressed="false">Yearly <span class="save">2 months free</span></button>
+</div>
+
+<div class="plans">
+<article class="plan" aria-label="Free plan">
+<div class="col" style="gap: 6px"><h3 class="h3">Free</h3><p class="s sub">Try Omnix with a couple of agents.</p></div>
+<div class="col" style="gap: 6px"><div class="price"><span class="amt">$0</span><span class="per">forever</span></div><span class="billnote">No card needed</span></div>
+<div class="limits">
+<div class="limit"><span class="v">2</span><span class="k">agents</span></div>
+<div class="limit"><span class="v">1</span><span class="k">scheduled task</span></div>
+<div class="limit"><span class="v">100K</span><span class="k">AI tokens / month</span></div>
+<div class="limit"><span class="v">30 min</span><span class="k">VM time / month</span></div>
+</div>
+<ul class="feats s">
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Gmail, web search and browsing</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Results in your in-app Inbox</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Live run panel and VM screen</li>
+<li class="no"><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>Slack, Notion and Jira</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Community support</li>
+</ul>
+<div style="flex: 1 1 auto"></div>
+<a class="btn bs" href="#">Start free</a>
+</article>
+
+<article class="plan pop" aria-label="Pro plan">
+<span class="tag">Most popular</span>
+<div class="col" style="gap: 6px"><h3 class="h3">Pro</h3><p class="s sub">For handing real, daily work to agents.</p></div>
+<div class="col" style="gap: 6px"><div class="price"><span class="amt" data-month="$19" data-year="$15">$19</span><span class="per">/ month</span></div><span class="billnote" data-month="Billed monthly" data-year="$180 billed yearly">Billed monthly</span></div>
+<div class="limits">
+<div class="limit"><span class="v">10</span><span class="k">agents</span></div>
+<div class="limit"><span class="v">Unlimited</span><span class="k">scheduled tasks</span></div>
+<div class="limit"><span class="v">2M</span><span class="k">AI tokens / month</span></div>
+<div class="limit"><span class="v">20 hours</span><span class="k">VM time / month</span></div>
+</div>
+<ul class="feats s">
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Everything in Free</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Slack, Notion and Jira</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Results by email as well</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Faster, more capable models</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Email support</li>
+</ul>
+<div style="flex: 1 1 auto"></div>
+<a class="btn bb" href="#">Upgrade to Pro</a>
+</article>
+
+<article class="plan" aria-label="Power plan">
+<div class="col" style="gap: 6px"><h3 class="h3">Power</h3><p class="s sub">For heavy automation and long VM sessions.</p></div>
+<div class="col" style="gap: 6px"><div class="price"><span class="amt" data-month="$49" data-year="$39">$49</span><span class="per">/ month</span></div><span class="billnote" data-month="Billed monthly" data-year="$468 billed yearly">Billed monthly</span></div>
+<div class="limits">
+<div class="limit"><span class="v">50</span><span class="k">agents</span></div>
+<div class="limit"><span class="v">Unlimited</span><span class="k">scheduled tasks</span></div>
+<div class="limit"><span class="v">10M</span><span class="k">AI tokens / month</span></div>
+<div class="limit"><span class="v">100 hours</span><span class="k">VM time / month</span></div>
+</div>
+<ul class="feats s">
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Everything in Pro</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>The most capable models</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Longer VM sessions</li>
+<li><svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Priority support</li>
+</ul>
+<div style="flex: 1 1 auto"></div>
+<a class="btn bp" href="#">Go Power</a>
+</article>
+</div>
+
+<div class="vmnote s">
+<svg class="i i16" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+<p><span class="semi">What counts as VM time?</span> <span class="sub">Only the minutes an agent's VM is actually running. It stops by itself after 10 idle minutes and keeps its files, and a stopped VM doesn't count.</span></p>
+</div>
+
+<div class="faq">
+<details><summary>What happens when I reach a limit?</summary><p>Your agents pause the work that needs more, and you get a note in your Inbox. Nothing is deleted. Upgrade, or wait for next month's allowance.</p></details>
+<details><summary>Do I need my own API keys?</summary><p>No. Models, search and VMs are included in every plan. You only connect the accounts you want agents to use, like Gmail or Slack.</p></details>
+<details><summary>Can I cancel any time?</summary><p>Yes. You keep your plan until the end of the period you paid for, then move to Free. Your agents and their history stay.</p></details>
+</div>
+<p class="cap sub">Prices in US dollars. Taxes may apply.</p>
+</section>
+<footer class="row" style="max-width: 1040px; margin: 0 auto; padding: 24px; border-top: 1px solid var(--border); justify-content: space-between; flex-wrap: wrap"><span class="s sub">© 2026 Omnix</span><div class="row s" style="gap: 20px"><a href="#docs" style="color: var(--fg2)">Docs</a><a href="#privacy" style="color: var(--fg2)">Privacy</a><a href="#terms" style="color: var(--fg2)">Terms</a></div></footer>
+</div>
+</div>
+
+<script>
+(function(){
+  var omx=document.querySelector(".omx"),root=document.documentElement,mq=matchMedia("(prefers-color-scheme: dark)"),manual=null;
+  function theme(){var t=root.getAttribute("data-theme");var dk=manual!==null?manual:(t?t==="dark":(location.hash==="#dark"||mq.matches));omx.classList.toggle("dark",dk);document.body.style.background=dk?"#0C0D1C":"#F7F8FC";root.style.colorScheme=dk?"dark":"light"}
+  theme();mq.addEventListener("change",theme);new MutationObserver(theme).observe(root,{attributes:true,attributeFilter:["data-theme"]});
+  document.addEventListener("keydown",function(e){if(e.key==="d"){manual=!omx.classList.contains("dark");theme()}});
+
+  // Monthly / Yearly: yearly shows the monthly equivalent and what is billed once a year.
+  var m=document.getElementById("bill-month"),y=document.getElementById("bill-year");
+  function bill(period){
+    m.classList.toggle("on",period==="month");y.classList.toggle("on",period==="year");
+    m.setAttribute("aria-pressed",String(period==="month"));y.setAttribute("aria-pressed",String(period==="year"));
+    document.querySelectorAll("[data-month]").forEach(function(el){el.textContent=el.getAttribute("data-"+period)});
+  }
+  m.addEventListener("click",function(){bill("month")});y.addEventListener("click",function(){bill("year")});
+
+  // ---- Live demo: one Job Searcher run, on a loop ----
+  var $=function(id){return document.getElementById(id)};
+  var steps=[].slice.call(document.querySelectorAll("#d-steps .dstep"));
+  var CHECK='<svg class="i i14" viewBox="0 0 24 24" style="width:11px;height:11px;stroke-width:3"><path d="M20 6 9 17l-5-5"/></svg>';
+  var TERM=[
+    '<span class="c">$ python3 find_jobs.py</span>',
+    'Memory: 312 jobs already sent',
+    'Remotive: 15 listings',
+    'Arbeitnow: 300 listings',
+    'Full stack roles: 9',
+    '<span class="h">New since last time: 7</span>',
+    'Saved tasks/jobs/new_jobs_2026-11-25.csv',
+    '<span class="g">[exit 0]</span>'
+  ];
+  var timers=[],clockT=null,start=0;
+  function later(ms,fn){timers.push(setTimeout(fn,ms))}
+  function fmt(s){var p=function(n){return String(n).padStart(2,"0")};return p(Math.floor(s/3600))+":"+p(Math.floor(s%3600/60))+":"+p(s%60)}
+  function step(i,state,t){var el=steps[i];el.className="dstep "+state;el.querySelector(".ind").innerHTML=state==="done"?CHECK:state==="cur"?'<span class="dspin"></span>':"";el.querySelector(".t").textContent=t||"—"}
+  function term(n){$("d-pre").innerHTML=TERM.slice(0,n).join("\n")}
+  function stats(cpu,mem){$("d-cpu").textContent=cpu;$("d-mem").textContent=mem;$("d-disk").textContent="4.9 GB"}
+  function vm(on){$("d-vm").classList.toggle("on",on);$("d-vmstat-t").textContent=on?"Running":"Starting…";$("d-screenmsg").hidden=on;$("d-term").style.opacity=on?"1":"0"}
+  function reset(){
+    timers.forEach(clearTimeout);timers=[];clearInterval(clockT);
+    steps.forEach(function(_,i){step(i,"pend")});term(0);vm(false);stats("—","—");$("d-disk").textContent="—";$("d-uptime").textContent="";
+    $("d-badge").classList.remove("done");$("d-badge-t").textContent="Live";$("d-clock").textContent=fmt(0);
+    $("d-reply").classList.add("dhide");$("d-answer").classList.add("dhide");$("d-toolspin").hidden=false;$("d-tooltext").textContent="Running code in the VM…";$("d-inbox").textContent="3";
+  }
+  function finished(){
+    // The resting state: what reduced motion shows, and where each loop ends.
+    vm(true);term(TERM.length);stats("2% used","612 MB");$("d-uptime").textContent="00:00:11";
+    ["0:02","0:05","0:07","0:09","0:11"].forEach(function(t,i){step(i,"done",t)});
+    $("d-badge").classList.add("done");$("d-badge-t").textContent="Done";$("d-clock").textContent=fmt(11);
+    $("d-reply").classList.remove("dhide");$("d-answer").classList.remove("dhide");$("d-toolspin").hidden=true;$("d-tooltext").textContent="Used sandbox.run_code and sandbox.share_file";$("d-inbox").textContent="4";
+  }
+  function play(){
+    reset();start=Date.now();
+    clockT=setInterval(function(){var s=Math.floor((Date.now()-start)/1000);$("d-clock").textContent=fmt(s);if($("d-vm").classList.contains("on"))$("d-uptime").textContent=fmt(Math.max(0,s-1))},1000);
+    later(400,function(){$("d-reply").classList.remove("dhide")});
+    later(1300,function(){vm(true);stats("31% used","540 MB");step(0,"cur");term(1)});
+    later(2300,function(){step(0,"done","0:02");step(1,"cur");term(2)});
+    later(3300,function(){term(3);stats("64% used","588 MB")});
+    later(4300,function(){term(4)});
+    later(5300,function(){step(1,"done","0:05");step(2,"cur");term(5);stats("48% used","604 MB")});
+    later(6300,function(){term(6)});
+    later(7300,function(){step(2,"done","0:07");step(3,"cur");term(7);$("d-tooltext").textContent="Sharing new_jobs.csv…"});
+    later(8600,function(){step(3,"done","0:09");step(4,"cur");term(8);stats("6% used","612 MB")});
+    later(10000,function(){clearInterval(clockT);finished()});
+    later(16000,play);
+  }
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches){reset();finished()}else{play()}
+})();
+</script>
+</body>
+</html>
