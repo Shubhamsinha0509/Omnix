@@ -17,7 +17,8 @@
     "verify:mcp": "node --no-warnings scripts/verify-mcp.ts",
     "verify:vm": "node --no-warnings scripts/verify-vm.ts",
     "verify:egress": "node --no-warnings scripts/verify-egress.ts",
-    "verify:limits": "node --no-warnings scripts/verify-limits.ts"
+    "verify:limits": "node --no-warnings scripts/verify-limits.ts",
+    "verify:account-deletion": "node --no-warnings scripts/verify-account-deletion.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -67,14 +67,16 @@ export const getCurrentUser = cache(async function getCurrentUser() {
   if (!email) return null;
 
   const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (user) return user;
 
-  // A valid session without a row: issued before the row existed, or the row was
-  // removed. Recreate it from the session rather than treating the user as signed out.
-  const [created] = await db
-    .insert(users)
-    .values({ email, name: session.user?.name ?? null, image: session.user?.image ?? null })
-    .onConflictDoUpdate({ target: users.email, set: { email } })
-    .returning();
-  return created ?? null;
+  // A session without a row counts as signed out. It used to recreate the row, but that
+  // would bring a deleted account straight back: a JWT session can't be revoked, so the
+  // browser still holds a valid one after "Delete account". Signing in again is what
+  // makes a (new, empty) account: the `signIn` callback above creates the row.
+  return user ?? null;
 });
+
+/** A signed-in session whose account no longer exists (deleted, or a reset database). */
+export async function hasOrphanSession() {
+  const session = await getServerSession(authOptions);
+  return Boolean(session?.user?.email) && !(await getCurrentUser());
+}

@@ -11,7 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "@/components/ui/toast";
 import { ComingSoonButton } from "@/components/custom/design/ComingSoonButton";
 import { setReduceMotion } from "@/components/theme-provider";
-import { updateProfile } from "@/app/workspace/settings/actions";
+import { signOut } from "next-auth/react";
+import { deleteAccount, updateProfile } from "@/app/workspace/settings/actions";
 import { MOCK_API_KEYS, MOCK_NOTIFICATION_PREFS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ const SECTIONS = [
   { id: "api-keys", label: "API keys", icon: KeyRound },
   { id: "billing", label: "Billing", icon: CreditCard },
   { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "delete-account", label: "Delete account", icon: Trash2 },
 ] as const;
 
 /** The settings menu (`nav` in 18-settings); Billing lives on its own page. */
@@ -55,6 +57,77 @@ const useMounted = () =>
     () => true,
     () => false,
   );
+
+/**
+ * Delete account: everything goes — agents, chats, tasks, runs, files, VMs — and connected
+ * accounts are disconnected at Google, Notion and Jira (lib/account.ts). Typing the email
+ * is the confirmation, because this can't be undone. The browser signs out afterwards.
+ */
+export function DeleteAccountSection({ email }: { email: string }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [deleting, startDeleting] = useTransition();
+  const matches = typed.trim().toLowerCase() === email.toLowerCase();
+
+  const remove = () => {
+    setError(null);
+    startDeleting(async () => {
+      const result = await deleteAccount({ confirmEmail: typed });
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+      // The session is a cookie the server can't revoke; ending it here is what signs out.
+      await signOut({ callbackUrl: "/" });
+    });
+  };
+
+  return (
+    <section id="delete-account" className={cn(card, "gap-3 border-destructive")}>
+      <h2 className="text-h2 font-semibold text-destructive">Delete account</h2>
+      <p className="text-muted-foreground">
+        Permanently deletes your agents, chats, tasks, run history, shared files and their virtual machines, and
+        disconnects Gmail, Notion and Jira. This can&apos;t be undone.
+      </p>
+      {!open ? (
+        <Button type="button" variant="destructive" size="sm" className="self-start" onClick={() => setOpen(true)}>
+          <Trash2 />
+          Delete my account
+        </Button>
+      ) : (
+        <div className="flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4">
+          <label htmlFor="confirm-email" className="text-body-s">
+            Type <span className="font-semibold">{email}</span> to confirm.
+          </label>
+          <Input
+            id="confirm-email"
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            disabled={deleting}
+            aria-invalid={Boolean(error)}
+          />
+          {error && (
+            <p role="alert" className="text-body-s text-destructive">
+              {error}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={deleting} onClick={() => { setOpen(false); setTyped(""); setError(null); }}>
+              Cancel
+            </Button>
+            <Button type="button" variant="destructive" size="sm" disabled={!matches || deleting} onClick={remove}>
+              {deleting && <Loader2 className="animate-spin" />}
+              {deleting ? "Deleting everything…" : "Delete my account forever"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
 
 /** Profile: name (saved), email, timezone. */
 export function ProfileSection({ name, email }: { name: string; email: string }) {

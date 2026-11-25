@@ -138,7 +138,7 @@ Other providers (Slack App Directory, Atlassian, Notion) have their own review p
 ## Privacy
 
 - A privacy policy that says what we access, why, and how long we keep it.
-- Users can delete an agent (removes its conversations, runs, memories and VM) and their whole account.
+- Users can delete an agent (removes its conversations, runs, memories and VM) and their whole account. **Built (D56):** Settings → Delete account kills the user's VMs, revokes every connected account at its provider, then deletes the user row and with it every table's data. A JWT session can't be revoked, so a session whose user row is gone counts as signed out rather than recreating the account.
 - **Decided (D43):** a run step's `payload` is emptied after 30 days by a nightly sweep
   and the row is kept; notifications are deleted after 90 days. So the audit trail — what
   ran, when, and whether it worked — lasts for ever, and the email and web content inside
