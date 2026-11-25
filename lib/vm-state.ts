@@ -12,6 +12,11 @@ export type VmState = {
   enabled: boolean;
   /** Running code doesn't ask first. */
   trusted: boolean;
+  /**
+   * The agent can read a connected account, so code always asks, whatever `trusted` says
+   * (lib/agent/egress.ts, D54).
+   */
+  guarded: boolean;
 };
 
 export function vmStateOf(tools: ToolSetting[]): VmState {
@@ -20,5 +25,6 @@ export function vmStateOf(tools: ToolSetting[]): VmState {
     available: vm.length > 0,
     enabled: vm.some((tool) => tool.enabled),
     trusted: vm.find((tool) => tool.key === "sandbox.run_code")?.approval === "never",
+    guarded: tools.some((tool) => tool.provider && tool.enabled && !tool.needsConnection),
   };
 }

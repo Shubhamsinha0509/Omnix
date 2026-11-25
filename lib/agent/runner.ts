@@ -30,6 +30,7 @@ import {
   resumeRunAfterApproval,
   startRun,
 } from "./runs";
+import { egressCheck, hasPrivateAccess, userUrls } from "./egress";
 
 /**
  * Guard rails. Every run is bounded: a model that keeps calling tools, a tool that
@@ -334,6 +335,17 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
   const allTools = options.tools.map((entry) => entry.tool);
   const executableOnly = allTools.filter((tool) => !isNativeTool(tool));
 
+  // The exfiltration guard (D54): does this agent read the user's accounts, and which URLs
+  // did the user write themselves. Only user messages count, never tool results or replies.
+  const egress = {
+    privateAccess: hasPrivateAccess(options.tools),
+    userUrls: userUrls(
+      messages
+        .filter((message) => message.role === "user" && typeof message.content === "string")
+        .map((message) => message.content as string),
+    ),
+  };
+
   let reply = "";
   let { inputTokens, outputTokens, toolCalls } = options.spent;
   /** Set when the run should stop after the current turn's tool results are sent. */
@@ -459,6 +471,7 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
             signal,
             emit,
             log,
+            egress,
           }),
         );
 
@@ -778,6 +791,8 @@ type ExecuteCallArgs = {
   signal: AbortSignal;
   emit: (event: RunEvent) => void;
   log: StepLogger;
+  /** What the exfiltration guard needs (lib/agent/egress.ts, D54). */
+  egress: { privateAccess: boolean; userUrls: Set<string> };
 };
 
 /** Validates, runs and logs one tool call, and builds the message the model gets back. */
@@ -816,10 +831,20 @@ async function executeCall(args: ExecuteCallArgs): Promise<CallOutcome> {
     return answer(call.id, { error: `Invalid arguments: ${checked.error}` });
   }
 
-  const stepId = await log("tool_call", tool.key, { args: checked.value, approval: entry.approval });
+  // An agent that can read the user's accounts asks before anything leaves for the
+  // internet, whatever its trust settings say (D54).
+  const guarded = egressCheck(tool.key, checked.value, args.egress);
+  const approval = guarded ? "always" : entry.approval;
+
+  const stepId = await log("tool_call", tool.key, {
+    args: checked.value,
+    approval,
+    ...(guarded ? { guard: "egress" } : {}),
+  });
 
   // Nothing has happened yet: ask the user, and let the loop park the run.
-  if (entry.approval === "always") {
+  if (approval === "always") {
+    const card = cardFor(tool, checked.value);
     emit({
       t: "activity",
       id: activityId,
@@ -832,7 +857,7 @@ async function executeCall(args: ExecuteCallArgs): Promise<CallOutcome> {
       kind: "approval",
       toolKey: tool.key,
       payload: checked.value,
-      card: cardFor(tool, checked.value),
+      card: guarded ? { ...card, details: [...(card.details ?? []), { label: "Why it asks", value: guarded }] } : card,
       stepId,
     };
   }
