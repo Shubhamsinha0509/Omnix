@@ -5,6 +5,7 @@ import Inbox, { type InboxView } from "@/components/custom/workspace/Inbox";
 import { eq } from "drizzle-orm";
 import { agents, db } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
+import { closeStaleRuns } from "@/lib/agent/runs";
 import { MOCK_INBOX_ITEMS } from "@/lib/mock-data";
 import { listInbox, type InboxItem } from "@/lib/notifications";
 import { TOOLS } from "@/lib/tools";
@@ -21,6 +22,8 @@ export default async function InboxPage({
 }) {
   const user = await getCurrentUser();
   if (!user) notFound();
+  // No approval card for a run that can no longer act on the answer.
+  await closeStaleRuns(user.id);
 
   const items = await listInbox(user.id);
   const { preview } = await searchParams;

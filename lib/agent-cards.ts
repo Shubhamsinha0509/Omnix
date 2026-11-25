@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { formatDistanceToNowStrict, isToday, format } from "date-fns";
 
 import { agents, db, runs, tasks } from "@/db";
+import { closeStaleRuns } from "@/lib/agent/runs";
 import { describeSchedule } from "@/lib/schedule/cron";
 import type { AgentCardData } from "@/components/custom/design/AgentCard";
 
@@ -28,6 +29,9 @@ const ago = (date: Date) =>
  * - **Active**: anything else (subtitle: last run, else its schedule, else when created).
  */
 export async function listAgentCards(userId: number, limit?: number): Promise<AgentCardData[]> {
+  // A run whose worker has gone would otherwise show "Running" on its card for ever.
+  await closeStaleRuns(userId);
+
   const base = db
     .select({
       id: agents.id,
