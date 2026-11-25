@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getOwnedAgent } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 import { inngest } from "@/lib/inngest/client";
+import { inngestConfigProblems, inngestMode } from "@/lib/inngest/config";
 import { rateLimit } from "@/lib/rate-limit";
 import { isValidTimezone, validateSchedule } from "@/lib/schedule/cron";
 import {
@@ -195,7 +196,11 @@ export async function runTaskNow(taskId: string): Promise<TaskActionResult> {
     console.error("Failed to start a task run:", error);
     return {
       error:
-        "Couldn't reach the background job service. In development, run `npm run inngest:dev` in a second terminal.",
+        inngestMode() === "cloud"
+          ? inngestConfigProblems().length > 0
+            ? "Background jobs aren't configured on this server yet, so tasks can't run."
+            : "Couldn't reach the background job service. Please try again in a moment."
+          : "Couldn't reach the background job service. In development, run `npm run inngest:dev` in a second terminal.",
     };
   }
 

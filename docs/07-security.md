@@ -116,7 +116,7 @@ content.
 
 - Every API route and server action checks the session **and** that the user owns the agent / conversation / connection / approval it touches. (Done for every route and action there is: chat, agents, the Gmail connect flow, tool grants and approval decisions.)
 - The scaffold's unauthenticated `POST /api/inngest/trigger` route has been **removed** (Phase 1).
-- In production, Inngest must use its signing key so only Inngest can call `/api/inngest`.
+- In production, Inngest must use its signing key so only Inngest can call `/api/inngest`. **Enforced in code (D57):** the SDK rejects unsigned, wrongly signed and stale requests (401), and the route refuses to run at all (503, with the missing variables named in the server log) while either key is missing or a placeholder. The keys themselves are set at deploy time from the Inngest dashboard. `npm run verify:inngest`.
 
 ## Abuse and cost
 
@@ -148,7 +148,7 @@ Other providers (Slack App Directory, Atlassian, Notion) have their own review p
 ## Checklist before any public deployment
 
 - [x] `/api/inngest/trigger` removed or authenticated
-- [ ] Inngest signing key configured
+- [ ] Inngest signing key configured (enforced in code, D57: production refuses to run without it; set `INNGEST_SIGNING_KEY` and `INNGEST_EVENT_KEY` in the host's environment at deploy)
 - [x] Token encryption in place
 - [x] Approvals on for all write/destructive tools by default
 - [ ] Per-user rate and usage limits (mostly: D45 caps unattended runs, D55 rate limits and VM time; token and agent-count allowances still open)

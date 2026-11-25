@@ -18,7 +18,8 @@
     "verify:vm": "node --no-warnings scripts/verify-vm.ts",
     "verify:egress": "node --no-warnings scripts/verify-egress.ts",
     "verify:limits": "node --no-warnings scripts/verify-limits.ts",
-    "verify:account-deletion": "node --no-warnings scripts/verify-account-deletion.ts"
+    "verify:account-deletion": "node --no-warnings scripts/verify-account-deletion.ts",
+    "verify:inngest": "node --no-warnings scripts/verify-inngest.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
