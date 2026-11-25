@@ -5,7 +5,9 @@ import { AppSidebar } from "@/components/custom/shell/AppSidebar";
 import { MobileTopBar } from "@/components/custom/shell/MobileTopBar";
 import { SearchCommand } from "@/components/custom/shell/SearchCommand";
 import { agents, db } from "@/db";
-import { getCurrentUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
+
+import { getCurrentUser, hasOrphanSession } from "@/lib/auth";
 import { MOCK_CURRENT_PLAN_ID } from "@/lib/mock-data";
 import { getPlan } from "@/lib/pricing";
 import { getMonthlyUsage } from "@/lib/usage";
@@ -17,6 +19,9 @@ import { countUnread } from "@/lib/notifications";
  */
 const WorkspaceLayout = async ({ children }: { children: React.ReactNode }) => {
   const user = await getCurrentUser();
+  // A session for an account that's gone (deleted in Settings): it can't own anything, so
+  // send it to sign in again, which starts a new, empty account.
+  if (!user && (await hasOrphanSession())) redirect("/sign-in");
 
   // The signed-in user's agents, newest first, for the sidebar — plus how many unread
   // things their agents have left them, which is the badge beside Inbox.

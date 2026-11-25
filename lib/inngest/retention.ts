@@ -1,5 +1,6 @@
 import { purgeStepPayloadsBefore } from "@/lib/agent/runs";
 import { purgeSharedFilesBefore } from "@/lib/files";
+import { purgeExpiredRateLimits } from "@/lib/rate-limit";
 import { purgeNotificationsBefore } from "@/lib/notifications";
 import { inngest } from "./client";
 
@@ -42,6 +43,13 @@ export const retentionSweep = inngest.createFunction(
       purgeSharedFilesBefore(new Date(Date.now() - RETENTION.stepPayloadDays * DAY_MS)),
     );
 
-    return { stepPayloadsCleared: steps, notificationsDeleted: notifications, sharedFilesDeleted: files };
+    const counters = await step.run("purge-rate-limits", () => purgeExpiredRateLimits());
+
+    return {
+      stepPayloadsCleared: steps,
+      notificationsDeleted: notifications,
+      sharedFilesDeleted: files,
+      rateLimitRowsDeleted: counters,
+    };
   },
 );

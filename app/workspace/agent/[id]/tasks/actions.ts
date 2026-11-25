@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getOwnedAgent } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 import { inngest } from "@/lib/inngest/client";
+import { inngestConfigProblems, inngestMode } from "@/lib/inngest/config";
+import { rateLimit } from "@/lib/rate-limit";
 import { isValidTimezone, validateSchedule } from "@/lib/schedule/cron";
 import {
   DELIVERY_CHANNELS,
@@ -178,6 +180,10 @@ export async function runTaskNow(taskId: string): Promise<TaskActionResult> {
   const task = await getOwnedTask(user.id, taskId);
   if (!task) return { error: "Task not found." };
 
+  // Each press is a full background run; the daily cap (D45) still applies on top.
+  const limited = await rateLimit(user.id, "runNowPerMinute");
+  if (!limited.ok) return { error: limited.error };
+
   try {
     await inngest.send({
       // One run per task per minute: a double click is one run, two deliberate presses a
@@ -190,7 +196,11 @@ export async function runTaskNow(taskId: string): Promise<TaskActionResult> {
     console.error("Failed to start a task run:", error);
     return {
       error:
-        "Couldn't reach the background job service. In development, run `npm run inngest:dev` in a second terminal.",
+        inngestMode() === "cloud"
+          ? inngestConfigProblems().length > 0
+            ? "Background jobs aren't configured on this server yet, so tasks can't run."
+            : "Couldn't reach the background job service. Please try again in a moment."
+          : "Couldn't reach the background job service. In development, run `npm run inngest:dev` in a second terminal.",
     };
   }
 

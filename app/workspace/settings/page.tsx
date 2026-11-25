@@ -2,6 +2,7 @@ import { PageWrap } from "@/components/custom/design/HeroWash";
 import {
   ApiKeysSection,
   AppearanceSection,
+  DeleteAccountSection,
   NotificationsSection,
   ProfileSection,
   SettingsNav,
@@ -26,6 +27,7 @@ export default async function SettingsPage() {
           <AppearanceSection />
           <ApiKeysSection />
           <NotificationsSection />
+          <DeleteAccountSection email={user.email} />
         </div>
       </div>
     </PageWrap>

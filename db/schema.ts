@@ -476,6 +476,37 @@ export const sandboxes = pgTable(
   (table) => [index("sandboxes_user_idx").on(table.userId)],
 );
 
+/**
+ * One stretch of a VM running, from start or resume to pause, stop or idle pause. What a
+ * plan's monthly VM time is measured on (lib/vm-usage.ts); `sandboxes.used_seconds` keeps
+ * the all-time total. The agent may be deleted later; the usage still counts.
+ */
+export const vmUsage = pgTable(
+  "vm_usage",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    agentId: uuid("agent_id"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }).notNull(),
+    seconds: integer("seconds").notNull(),
+  },
+  (table) => [index("vm_usage_user_ended_idx").on(table.userId, table.endedAt)],
+);
+
+/**
+ * Fixed-window request counters (lib/rate-limit.ts). One row per user, limit and window;
+ * a request bumps it in one statement, so the count holds across server instances.
+ * Expired rows are deleted by the nightly sweep.
+ */
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
 /** Postgres `bytea`: raw bytes, read and written as a Node Buffer. */
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",

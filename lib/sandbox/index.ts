@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { Sandbox, SandboxNotFoundError } from "@e2b/desktop";
 
 import { db, sandboxes, type SandboxRow } from "@/db";
+import { recordVmStretch, vmBudget, vmCapMessage } from "@/lib/vm-usage";
 
 /**
  * Each agent's own VM (D15, docs/06-virtual-machines.md): an E2B desktop sandbox, so it can
@@ -42,6 +43,8 @@ export type SandboxView = {
   runningSince: string | null;
   expiresAt: string | null;
   usedSeconds: number;
+  /** This month's VM time against the plan (lib/vm-usage.ts); set by `getSandbox`. */
+  budget?: { usedSeconds: number; allowanceSeconds: number };
 };
 
 export type SandboxResult = { error: string } | { vm: SandboxView };
@@ -71,6 +74,33 @@ function stretchSeconds(row: SandboxRow, until = new Date()) {
   if (!row.runningSince) return 0;
   const end = row.expiresAt && row.expiresAt < until ? row.expiresAt : until;
   return Math.max(0, Math.round((end.getTime() - row.runningSince.getTime()) / 1000));
+}
+
+/**
+ * Ends the current running stretch: records it for the monthly VM allowance and returns
+ * its seconds, for the all-time total. Called once wherever a running VM stops running.
+ */
+async function endStretch(row: SandboxRow, until = new Date()) {
+  const seconds = stretchSeconds(row, until);
+  if (row.runningSince) {
+    const endedAt = row.expiresAt && row.expiresAt < until ? row.expiresAt : until;
+    try {
+      await recordVmStretch({ userId: row.userId, agentId: row.agentId, startedAt: row.runningSince, endedAt, seconds });
+    } catch (error) {
+      // Usage must not stop the VM from stopping; the all-time total still counts it.
+      console.error("Couldn't record VM usage:", error);
+    }
+  }
+  return seconds;
+}
+
+/**
+ * How long the VM may run before E2B stops it: the idle period, or what is left of the
+ * month's allowance if that is shorter, so a VM can't run past the plan's cap unseen.
+ */
+async function runForMs(userId: number) {
+  const budget = await vmBudget(userId);
+  return { budget, ms: Math.min(IDLE_MS, Math.max(5_000, budget.leftSeconds * 1000)) };
 }
 
 async function readRow(userId: number, agentId: string) {
@@ -134,6 +164,20 @@ async function ensureRow(userId: number, agentId: string) {
  * E2B has most likely paused it; ask, and bring the record up to date.
  */
 export async function getSandbox(userId: number, agentId: string): Promise<SandboxView> {
+  const view = await currentSandbox(userId, agentId);
+  const budget = await vmBudget(userId);
+
+  // Over the month's allowance: a VM still running stops now, keeping its files.
+  if (view.status === "running" && budget.leftSeconds <= 0) {
+    const paused = await pauseSandbox(userId, agentId);
+    const after = "vm" in paused ? paused.vm : view;
+    return { ...after, error: vmCapMessage(budget), budget: { usedSeconds: budget.usedSeconds, allowanceSeconds: budget.allowanceSeconds } };
+  }
+  return { ...view, budget: { usedSeconds: budget.usedSeconds, allowanceSeconds: budget.allowanceSeconds } };
+}
+
+/** The VM as our record and E2B say it is, without the allowance check. */
+async function currentSandbox(userId: number, agentId: string): Promise<SandboxView> {
   const row = await readRow(userId, agentId);
   if (!row) return OFF;
   if (row.status !== "running" || !row.providerId || !row.expiresAt || row.expiresAt > new Date()) {
@@ -150,7 +194,7 @@ export async function getSandbox(userId: number, agentId: string): Promise<Sandb
     return toView(
       await save(userId, agentId, {
         status: "paused",
-        usedSeconds: row.usedSeconds + stretchSeconds(row),
+        usedSeconds: row.usedSeconds + (await endStretch(row)),
         runningSince: null,
         expiresAt: null,
       }),
@@ -161,7 +205,7 @@ export async function getSandbox(userId: number, agentId: string): Promise<Sandb
         await save(userId, agentId, {
           status: "stopped",
           providerId: null,
-          usedSeconds: row.usedSeconds + stretchSeconds(row),
+          usedSeconds: row.usedSeconds + (await endStretch(row)),
           runningSince: null,
           expiresAt: null,
         }),
@@ -180,6 +224,10 @@ export async function getSandbox(userId: number, agentId: string): Promise<Sandb
 export async function startSandbox(userId: number, agentId: string): Promise<SandboxResult> {
   if (!hasSandboxKey()) return { error: NO_KEY };
 
+  // The plan's monthly VM time (lib/vm-usage.ts): nothing starts once it's used up.
+  const { budget, ms: runFor } = await runForMs(userId);
+  if (budget.leftSeconds <= 0) return { error: vmCapMessage(budget) };
+
   const row = await ensureRow(userId, agentId);
   if (!row) return { error: "Couldn't find this agent's VM record. Please try again." };
   if (!(await claim(userId, agentId, row, ["stopped", "paused", "error"], "starting"))) {
@@ -193,7 +241,7 @@ export async function startSandbox(userId: number, agentId: string): Promise<San
     // A paused VM comes back with its files and memory; connecting resumes it.
     if (row.providerId) {
       try {
-        vm = await Sandbox.connect(row.providerId, { timeoutMs: IDLE_MS });
+        vm = await Sandbox.connect(row.providerId, { timeoutMs: runFor });
       } catch (error) {
         // Gone on E2B's side (killed elsewhere): start a fresh one below.
         if (!(error instanceof SandboxNotFoundError)) throw error;
@@ -201,7 +249,7 @@ export async function startSandbox(userId: number, agentId: string): Promise<San
     }
 
     vm ??= await Sandbox.create({
-      timeoutMs: IDLE_MS,
+      timeoutMs: runFor,
       lifecycle: { onTimeout: "pause", autoResume: false },
       // Only our own ids: nothing personal, nothing secret.
       metadata: { agentId },
@@ -217,7 +265,7 @@ export async function startSandbox(userId: number, agentId: string): Promise<San
       providerId: vm.sandboxId,
       error: null,
       runningSince: startedAt,
-      expiresAt: new Date(startedAt.getTime() + IDLE_MS),
+      expiresAt: new Date(startedAt.getTime() + runFor),
     });
     return { vm: toView(saved) };
   } catch (error) {
@@ -247,7 +295,7 @@ export async function pauseSandbox(userId: number, agentId: string): Promise<San
     await Sandbox.pause(row.providerId);
     const saved = await save(userId, agentId, {
       status: "paused",
-      usedSeconds: row.usedSeconds + stretchSeconds(row, pausedAt),
+      usedSeconds: row.usedSeconds + (await endStretch(row, pausedAt)),
       runningSince: null,
       expiresAt: null,
     });
@@ -257,7 +305,7 @@ export async function pauseSandbox(userId: number, agentId: string): Promise<San
       const saved = await save(userId, agentId, {
         status: "stopped",
         providerId: null,
-        usedSeconds: row.usedSeconds + stretchSeconds(row, pausedAt),
+        usedSeconds: row.usedSeconds + (await endStretch(row, pausedAt)),
         runningSince: null,
         expiresAt: null,
       });
@@ -289,7 +337,7 @@ export async function stopSandbox(userId: number, agentId: string): Promise<Sand
       status: "stopped",
       providerId: null,
       error: null,
-      usedSeconds: row.usedSeconds + (row.status === "running" ? stretchSeconds(row, stoppedAt) : 0),
+      usedSeconds: row.usedSeconds + (row.status === "running" ? await endStretch(row, stoppedAt) : 0),
       runningSince: null,
       expiresAt: null,
     });
@@ -336,9 +384,12 @@ export async function sandboxForTool(
 
   const row = await readRow(userId, agentId);
   if (!row?.providerId) return { error: "The VM isn't available. Please try again." };
+  // Within the month's allowance (getSandbox above has already stopped a VM past it).
+  const { budget, ms: runFor } = await runForMs(userId);
+  if (budget.leftSeconds <= 0) return { error: vmCapMessage(budget) };
   try {
-    const vm = await Sandbox.connect(row.providerId, { timeoutMs: IDLE_MS });
-    await save(userId, agentId, { expiresAt: new Date(Date.now() + IDLE_MS) });
+    const vm = await Sandbox.connect(row.providerId, { timeoutMs: runFor });
+    await save(userId, agentId, { expiresAt: new Date(Date.now() + runFor) });
     return { vm };
   } catch (error) {
     console.error("Couldn't connect to the VM for a tool call:", error);
@@ -424,9 +475,11 @@ export async function openSandboxScreen(
 
   const row = await readRow(userId, agentId);
   if (row?.status !== "running" || !row.providerId) return { error: "Start the VM to see its screen." };
+  const { budget, ms: runFor } = await runForMs(userId);
+  if (budget.leftSeconds <= 0) return { error: vmCapMessage(budget) };
 
   try {
-    const vm = await Sandbox.connect(row.providerId, { timeoutMs: IDLE_MS });
+    const vm = await Sandbox.connect(row.providerId, { timeoutMs: runFor });
     try {
       await vm.stream.stop();
     } catch {
@@ -436,7 +489,7 @@ export async function openSandboxScreen(
     const authKey = vm.stream.getAuthKey();
     const base = { autoConnect: true, resize: "scale" as const, authKey };
 
-    const saved = await save(userId, agentId, { expiresAt: new Date(Date.now() + IDLE_MS) });
+    const saved = await save(userId, agentId, { expiresAt: new Date(Date.now() + runFor) });
     return {
       screen: {
         viewUrl: vm.stream.getUrl({ ...base, viewOnly: true }),
@@ -449,7 +502,7 @@ export async function openSandboxScreen(
       await save(userId, agentId, {
         status: "stopped",
         providerId: null,
-        usedSeconds: row.usedSeconds + stretchSeconds(row),
+        usedSeconds: row.usedSeconds + (await endStretch(row)),
         runningSince: null,
         expiresAt: null,
       });
@@ -458,6 +511,25 @@ export async function openSandboxScreen(
     console.error("Failed to open the VM's screen:", error);
     return { error: "Couldn't open the VM's screen. Please try again." };
   }
+}
+
+/**
+ * Stops (keeping files) every running VM whose owner is past the month's allowance. E2B's
+ * own timer already stops a VM at the cap (`runForMs`); this catches anything that slipped
+ * through, such as a VM started before the allowance was lowered. For the background sweep.
+ */
+export async function enforceVmCaps() {
+  const running = await db
+    .select({ userId: sandboxes.userId, agentId: sandboxes.agentId })
+    .from(sandboxes)
+    .where(eq(sandboxes.status, "running"));
+  let stopped = 0;
+  const over = new Map<number, boolean>();
+  for (const { userId, agentId } of running) {
+    if (!over.has(userId)) over.set(userId, (await vmBudget(userId)).leftSeconds <= 0);
+    if (over.get(userId) && "vm" in (await pauseSandbox(userId, agentId))) stopped++;
+  }
+  return stopped;
 }
 
 /**

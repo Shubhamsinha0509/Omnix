@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 
 import { db, users } from "@/db";
+import { deleteAccountData } from "@/lib/account";
 import { getCurrentUser } from "@/lib/auth";
 
 const MAX_NAME = 80;
@@ -26,5 +27,27 @@ export async function updateProfile(input: { name: string }): Promise<{ error: s
 
   // The name shows in the sidebar and the greeting.
   revalidatePath("/workspace", "layout");
+  return { ok: true };
+}
+
+/**
+ * Deletes the signed-in user's account and everything in it (lib/account.ts). The user
+ * types their email to confirm; the browser signs out afterwards.
+ */
+export async function deleteAccount(input: { confirmEmail: string }): Promise<{ error: string } | { ok: true }> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You need to be signed in." };
+
+  if (input.confirmEmail?.trim().toLowerCase() !== user.email.toLowerCase()) {
+    return { error: "Type your email address exactly as shown to confirm." };
+  }
+
+  try {
+    const result = await deleteAccountData(user.id);
+    if (!result.deleted) return { error: "Couldn't delete your account. Please try again." };
+  } catch (error) {
+    console.error("Account deletion failed:", error);
+    return { error: "Couldn't delete your account. Please try again." };
+  }
   return { ok: true };
 }

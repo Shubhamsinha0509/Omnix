@@ -106,14 +106,16 @@ export function VmSettingRow({ agentId, agentName, vm }: { agentId: string; agen
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="font-medium">Run code without asking</span>
               <span className="text-body-s text-muted-foreground">
-                {state.trusted
-                  ? "On: programs run straight away, in chat and in scheduled tasks. The VM holds none of your keys."
-                  : "Off: you approve each program before it runs. Scheduled tasks wait in your Inbox for that."}
+                {state.guarded
+                  ? `${agentName} can read your connected accounts, so it always asks before running code: code could send what it read to the internet.`
+                  : state.trusted
+                    ? "On: programs run straight away, in chat and in scheduled tasks. The VM holds none of your keys."
+                    : "Off: you approve each program before it runs. Scheduled tasks wait in your Inbox for that."}
               </span>
             </span>
             <Switch
-              checked={state.trusted}
-              disabled={busy}
+              checked={state.trusted && !state.guarded}
+              disabled={busy || state.guarded}
               onCheckedChange={(checked) => save({ enabled: true, trusted: Boolean(checked) })}
               aria-label="Run code without asking"
             />
@@ -159,6 +161,20 @@ export function TaskApprovalWarning({
   const [busy, startSaving] = useTransition();
 
   if (!vm.available || !vm.enabled) return null;
+
+  // Trust can't help here: an agent that reads accounts always asks before running code.
+  if (vm.guarded) {
+    return (
+      <div role="status" className="flex items-start gap-2.5 rounded-lg border border-[#F59E0B]/45 bg-warning-subtle px-4 py-3 text-warning-text dark:border-[#F59E0B]/40">
+        <TriangleAlert className="mt-[3px] size-4 shrink-0" aria-hidden="true" />
+        <p className="text-body-s">
+          <span className="font-semibold">Runs that use code will wait for you.</span> {agentName} can read your
+          connected accounts, so it asks before running code in its VM, and each such run stops in your Inbox until
+          you approve. Reading and summarising don&apos;t need code.
+        </p>
+      </div>
+    );
+  }
 
   if (trusted) {
     return vm.trusted ? null : (

@@ -1,7 +1,8 @@
-"use server";
+﻿"use server";
 
 import { getOwnedAgent } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
 import {
   getSandbox,
   getSandboxStats,
@@ -20,11 +21,16 @@ import {
  * The agent has to belong to the person asking (D14); everything else is in lib/sandbox.
  */
 
-async function owner(agentId: string): Promise<{ error: string } | { userId: number }> {
+async function owner(agentId: string, limited = false): Promise<{ error: string } | { userId: number }> {
   const user = await getCurrentUser();
   if (!user) return { error: "You need to be signed in to use a VM." };
   const agent = await getOwnedAgent(user.id, agentId);
   if (!agent) return { error: "Agent not found." };
+  // Actions that call E2B are counted; reading the state (polled by the card) isn't.
+  if (limited) {
+    const checked = await rateLimit(user.id, "vmActionPerMinute");
+    if (!checked.ok) return { error: checked.error };
+  }
   return { userId: user.id };
 }
 
@@ -37,14 +43,14 @@ export async function getVm(agentId: string): Promise<SandboxResult> {
 
 /** Starts the VM, or resumes it if paused. */
 export async function startVm(agentId: string): Promise<SandboxResult> {
-  const who = await owner(agentId);
+  const who = await owner(agentId, true);
   if ("error" in who) return who;
   return startSandbox(who.userId, agentId);
 }
 
 /** Pauses the VM, keeping its files and memory. */
 export async function pauseVm(agentId: string): Promise<SandboxResult> {
-  const who = await owner(agentId);
+  const who = await owner(agentId, true);
   if ("error" in who) return who;
   return pauseSandbox(who.userId, agentId);
 }
@@ -53,7 +59,7 @@ export async function pauseVm(agentId: string): Promise<SandboxResult> {
 export async function openVmScreen(
   agentId: string,
 ): Promise<{ error: string } | { screen: SandboxScreen; vm: SandboxView }> {
-  const who = await owner(agentId);
+  const who = await owner(agentId, true);
   if ("error" in who) return who;
   return openSandboxScreen(who.userId, agentId);
 }
@@ -67,7 +73,7 @@ export async function getVmStats(agentId: string): Promise<{ error: string } | {
 
 /** Stops the VM and deletes everything on it. */
 export async function stopVm(agentId: string): Promise<SandboxResult> {
-  const who = await owner(agentId);
+  const who = await owner(agentId, true);
   if ("error" in who) return who;
   return stopSandbox(who.userId, agentId);
 }
