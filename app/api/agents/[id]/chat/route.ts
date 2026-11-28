@@ -9,7 +9,7 @@ import {
   getOwnedAgent,
   releaseConversation,
 } from "@/lib/agents";
-import { hasModelKey } from "@/lib/ai";
+import { hasModelKey, MODEL_SETUP_MESSAGE, modelConfigProblem } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -43,6 +43,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!user) return jsonError("Please sign in again.", 401);
   if (!hasModelKey()) {
     return jsonError("AI isn't set up yet: add OPENROUTER_API_KEY to .env and restart the dev server.", 503);
+  }
+  // Refuse before a run is opened, rather than failing inside it (D59).
+  const modelProblem = modelConfigProblem();
+  if (modelProblem) {
+    console.error(`Chat refused: ${modelProblem}`);
+    return jsonError(MODEL_SETUP_MESSAGE, 503);
   }
 
   const body = (await request.json().catch(() => null)) as

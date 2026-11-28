@@ -1,6 +1,6 @@
 import { APIError } from "openai";
 
-import { CHAT_MODEL } from "@/lib/ai";
+import { CHAT_MODEL, MODEL_SETUP_MESSAGE } from "@/lib/ai";
 
 /**
  * Explains the most common setup and service problems in plain words.
@@ -8,6 +8,10 @@ import { CHAT_MODEL } from "@/lib/ai";
  */
 export function friendlyModelError(error: unknown) {
   const message = String((error as { message?: unknown })?.message ?? "");
+
+  // Refused before any call (D59). Matched on the message too: a background run's error
+  // arrives as plain JSON. The detail names env vars, so it stays in the server log.
+  if (message.startsWith("Model setup:")) return MODEL_SETUP_MESSAGE;
 
   // The free models' daily allowance, worth naming exactly: waiting a moment won't help.
   if (/free-models-per-day/i.test(message)) {

@@ -150,6 +150,7 @@ Other providers (Slack App Directory, Atlassian, Notion) have their own review p
 - [x] `/api/inngest/trigger` removed or authenticated
 - [ ] Inngest signing key configured (enforced in code, D57: production refuses to run without it; set `INNGEST_SIGNING_KEY` and `INNGEST_EVENT_KEY` in the host's environment at deploy)
 - [x] Token encryption in place
+- [x] Production refuses a free or unset model (D59): free providers may log prompts
 - [x] Approvals on for all write/destructive tools by default
 - [ ] Per-user rate and usage limits (mostly: D45 caps unattended runs, D55 rate limits and VM time; token and agent-count allowances still open)
 - [x] Retention for run contents decided and running (D43)

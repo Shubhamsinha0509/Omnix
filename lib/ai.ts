@@ -3,9 +3,9 @@ import OpenAI from "openai";
 import type { Agent } from "@/db";
 
 /**
- * Used when `OPENROUTER_MODEL` isn't set. Free (D38) because the account has no credit;
- * free providers may log prompts, and agents now read real email, so set
- * `OPENROUTER_MODEL=deepseek/deepseek-chat-v3.1` (paid, D34) once there is credit.
+ * Used when `OPENROUTER_MODEL` isn't set, in local development only. Free (D38); free
+ * providers may log prompts, and agents read real email, so production refuses it and
+ * requires a paid model in `OPENROUTER_MODEL` (D59, `modelConfigProblem`).
  */
 const DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
 
@@ -17,15 +17,57 @@ const DEFAULT_MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free";
  */
 export const CHAT_MODEL = resolveModel(process.env.OPENROUTER_MODEL);
 
-/** An OpenRouter id always looks like "provider/model"; anything else falls back loudly. */
+/** An OpenRouter id always looks like "provider/model". */
+const MODEL_ID = /^[\w.-]+\/[\w.:-]+$/;
+
+/** Locally, anything else falls back loudly to the free default (refused in production, D59). */
 function resolveModel(value: string | undefined) {
   const id = value?.trim();
   if (!id) return DEFAULT_MODEL;
-  if (!/^[\w.-]+\/[\w.:-]+$/.test(id)) {
+  if (!MODEL_ID.test(id)) {
     console.warn(`OPENROUTER_MODEL "${id}" doesn't look like an OpenRouter model id; using ${DEFAULT_MODEL}.`);
     return DEFAULT_MODEL;
   }
   return id;
+}
+
+export type ModelEnv = Record<string, string | undefined>;
+
+/** A production build or a non-development Vercel deployment. */
+export function isProduction(env: ModelEnv = process.env) {
+  const vercel = env.VERCEL_ENV?.trim();
+  return Boolean(env.NODE_ENV?.startsWith("prod") || (vercel && vercel !== "development"));
+}
+
+/**
+ * Why the model setup isn't safe to run in production, or null when it is (D59).
+ *
+ * Free models are for local development only: their providers may log prompts, and agents
+ * read real email. In production `OPENROUTER_MODEL` must name a paid model explicitly;
+ * the free fallback never applies there. Locally this is always null.
+ */
+export function modelConfigProblem(env: ModelEnv = process.env): string | null {
+  if (!isProduction(env)) return null;
+  const id = env.OPENROUTER_MODEL?.trim() ?? "";
+  if (!id) return "OPENROUTER_MODEL is not set. In production it must name a paid OpenRouter model (e.g. deepseek/deepseek-chat-v3.1).";
+  if (!MODEL_ID.test(id)) return `OPENROUTER_MODEL "${id}" doesn't look like an OpenRouter model id (provider/model).`;
+  if (/:free$/i.test(id) || /^openrouter\/free/i.test(id)) {
+    return `OPENROUTER_MODEL "${id}" is a free model. Free providers may log prompts, so production needs a paid model.`;
+  }
+  return null;
+}
+
+/** What users see when the model setup is refused; the server log carries the detail. */
+export const MODEL_SETUP_MESSAGE = "AI is unavailable on this server right now: its model isn't set up for production.";
+
+/** Thrown instead of calling a model that `modelConfigProblem` refuses. */
+export class ModelSetupError extends Error {
+  readonly problem: string;
+  constructor(problem: string) {
+    super(`Model setup: ${problem}`);
+    this.problem = problem;
+    this.name = "ModelSetupError";
+  }
 }
 
 /** OpenRouter speaks the OpenAI API, so the official SDK is the client (decision D26). */
@@ -38,8 +80,12 @@ export function hasModelKey() {
 }
 
 // Created lazily so the app still starts when the key isn't set yet.
+// Every model call (chat and background runs) goes through here, so the production check
+// lives here too: it is read per call, so fixing the environment needs only a restart.
 let client: OpenAI | null = null;
 export function getModelClient() {
+  const problem = modelConfigProblem();
+  if (problem) throw new ModelSetupError(problem);
   client ??= new OpenAI({
     apiKey: process.env.OPENROUTER_API_KEY,
     baseURL: OPENROUTER_BASE_URL,

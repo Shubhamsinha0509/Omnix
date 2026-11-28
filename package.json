@@ -22,7 +22,8 @@
     "verify:limits": "node --no-warnings scripts/verify-limits.ts",
     "verify:account-deletion": "node --no-warnings scripts/verify-account-deletion.ts",
     "verify:inngest": "node --no-warnings scripts/verify-inngest.ts",
-    "verify:deadline": "node --no-warnings scripts/verify-deadline.ts"
+    "verify:deadline": "node --no-warnings scripts/verify-deadline.ts",
+    "verify:model": "node --no-warnings scripts/verify-model.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
