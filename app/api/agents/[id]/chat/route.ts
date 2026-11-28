@@ -9,7 +9,7 @@ import {
   getOwnedAgent,
   releaseConversation,
 } from "@/lib/agents";
-import { hasModelKey, MODEL_SETUP_MESSAGE, modelConfigProblem } from "@/lib/ai";
+import { modelNotice } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -41,15 +41,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const user = await getCurrentUser();
   if (!user) return jsonError("Please sign in again.", 401);
-  if (!hasModelKey()) {
-    return jsonError("AI isn't set up yet: add OPENROUTER_API_KEY to .env and restart the dev server.", 503);
-  }
-  // Refuse before a run is opened, rather than failing inside it (D59).
-  const modelProblem = modelConfigProblem();
-  if (modelProblem) {
-    console.error(`Chat refused: ${modelProblem}`);
-    return jsonError(MODEL_SETUP_MESSAGE, 503);
-  }
+  // No key, or a model production refuses (D59): say so before a run is opened (D60).
+  const aiNotice = modelNotice();
+  if (aiNotice) return jsonError(aiNotice, 503);
 
   const body = (await request.json().catch(() => null)) as
     | { message?: unknown; conversationId?: unknown; timezone?: unknown }

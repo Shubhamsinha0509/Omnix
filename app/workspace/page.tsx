@@ -9,7 +9,7 @@ import { HomeComposer } from "@/components/custom/home/HomeComposer";
 import { AgentAvatar } from "@/components/custom/workspace/AgentAvatar";
 import { agents, conversations, db } from "@/db";
 import { listAgentCards } from "@/lib/agent-cards";
-import { CHAT_MODEL, hasModelKey } from "@/lib/ai";
+import { CHAT_MODEL, modelNotice } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
 import { agentFacts } from "@/lib/agent-facts";
 import { suggestionsFor } from "@/lib/agent-guide";
@@ -61,6 +61,7 @@ export default async function WorkspacePage() {
   );
 
   const firstName = user.name?.trim().split(/\s+/)[0] ?? null;
+  const aiNotice = modelNotice();
 
   return (
     <div className="relative overflow-hidden">
@@ -73,10 +74,10 @@ export default async function WorkspacePage() {
           </p>
         </div>
 
-        {!hasModelKey() && (
+        {aiNotice && (
           <p className="flex items-center gap-2 rounded-md bg-warning-subtle px-3 py-2 text-body-s text-warning-text">
             <TriangleAlert className="size-4 shrink-0" />
-            AI isn&apos;t set up yet: add OPENROUTER_API_KEY to .env and restart the dev server.
+            {aiNotice}
           </p>
         )}
 

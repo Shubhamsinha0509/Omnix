@@ -3,6 +3,7 @@ import { Sandbox, SandboxNotFoundError } from "@e2b/desktop";
 
 import { db, sandboxes, type SandboxRow } from "@/db";
 import { recordVmStretch, vmBudget, vmCapMessage } from "@/lib/vm-usage";
+import { setupNotice } from "@/lib/setup";
 
 /**
  * Each agent's own VM (D15, docs/06-virtual-machines.md): an E2B desktop sandbox, so it can
@@ -56,7 +57,8 @@ export function hasSandboxKey() {
   return Boolean(process.env.E2B_API_KEY);
 }
 
-const NO_KEY = "VMs aren't set up yet: add E2B_API_KEY to .env and restart the dev server.";
+/** Shown when E2B_API_KEY is missing: the fix locally, a plain notice in production (D60). */
+export const vmSetupNotice = () => setupNotice("VMs", "add E2B_API_KEY to .env and restart the dev server.");
 
 function toView(row: SandboxRow | undefined): SandboxView {
   if (!row) return OFF;
@@ -222,7 +224,7 @@ async function currentSandbox(userId: number, agentId: string): Promise<SandboxV
  * running or another request is starting it.
  */
 export async function startSandbox(userId: number, agentId: string): Promise<SandboxResult> {
-  if (!hasSandboxKey()) return { error: NO_KEY };
+  if (!hasSandboxKey()) return { error: vmSetupNotice() };
 
   // The plan's monthly VM time (lib/vm-usage.ts): nothing starts once it's used up.
   const { budget, ms: runFor } = await runForMs(userId);
@@ -282,7 +284,7 @@ export async function startSandbox(userId: number, agentId: string): Promise<San
 
 /** Pauses a running VM: its files and memory are kept, and it costs nothing while paused. */
 export async function pauseSandbox(userId: number, agentId: string): Promise<SandboxResult> {
-  if (!hasSandboxKey()) return { error: NO_KEY };
+  if (!hasSandboxKey()) return { error: vmSetupNotice() };
 
   const row = await readRow(userId, agentId);
   if (!row?.providerId) return { vm: toView(row) };
@@ -321,7 +323,7 @@ export async function pauseSandbox(userId: number, agentId: string): Promise<San
 
 /** Stops the VM for good: E2B deletes it with everything on it. The usage total stays. */
 export async function stopSandbox(userId: number, agentId: string): Promise<SandboxResult> {
-  if (!hasSandboxKey()) return { error: NO_KEY };
+  if (!hasSandboxKey()) return { error: vmSetupNotice() };
 
   const row = await readRow(userId, agentId);
   if (!row?.providerId) return { vm: toView(row) };
@@ -363,7 +365,7 @@ export async function sandboxForTool(
   agentId: string,
   signal?: AbortSignal,
 ): Promise<{ error: string } | { vm: Sandbox }> {
-  if (!hasSandboxKey()) return { error: NO_KEY };
+  if (!hasSandboxKey()) return { error: vmSetupNotice() };
 
   const deadline = Date.now() + 60_000;
   let view = await getSandbox(userId, agentId);
@@ -419,7 +421,7 @@ export async function getSandboxStats(
   userId: number,
   agentId: string,
 ): Promise<{ error: string } | { stats: SandboxStats }> {
-  if (!hasSandboxKey()) return { error: NO_KEY };
+  if (!hasSandboxKey()) return { error: vmSetupNotice() };
   const row = await readRow(userId, agentId);
   if (row?.status !== "running" || !row.providerId) return { error: "The VM isn't running." };
 
@@ -471,7 +473,7 @@ export async function openSandboxScreen(
   userId: number,
   agentId: string,
 ): Promise<{ error: string } | { screen: SandboxScreen; vm: SandboxView }> {
-  if (!hasSandboxKey()) return { error: NO_KEY };
+  if (!hasSandboxKey()) return { error: vmSetupNotice() };
 
   const row = await readRow(userId, agentId);
   if (row?.status !== "running" || !row.providerId) return { error: "Start the VM to see its screen." };

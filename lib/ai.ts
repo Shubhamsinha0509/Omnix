@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 
 import type { Agent } from "@/db";
+import { isProduction, type ServerEnv, setupNotice } from "@/lib/setup";
 
 /**
  * Used when `OPENROUTER_MODEL` isn't set, in local development only. Free (D38); free
@@ -31,13 +32,8 @@ function resolveModel(value: string | undefined) {
   return id;
 }
 
-export type ModelEnv = Record<string, string | undefined>;
-
-/** A production build or a non-development Vercel deployment. */
-export function isProduction(env: ModelEnv = process.env) {
-  const vercel = env.VERCEL_ENV?.trim();
-  return Boolean(env.NODE_ENV?.startsWith("prod") || (vercel && vercel !== "development"));
-}
+export type ModelEnv = ServerEnv;
+export { isProduction };
 
 /**
  * Why the model setup isn't safe to run in production, or null when it is (D59).
@@ -58,7 +54,7 @@ export function modelConfigProblem(env: ModelEnv = process.env): string | null {
 }
 
 /** What users see when the model setup is refused; the server log carries the detail. */
-export const MODEL_SETUP_MESSAGE = "AI is unavailable on this server right now: its model isn't set up for production.";
+export const MODEL_SETUP_MESSAGE = "AI isn't available on this server right now.";
 
 /** Thrown instead of calling a model that `modelConfigProblem` refuses. */
 export class ModelSetupError extends Error {
@@ -77,6 +73,26 @@ const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || "https://openrout
 /** True when an OpenRouter API key is configured in .env. */
 export function hasModelKey() {
   return Boolean(process.env.OPENROUTER_API_KEY);
+}
+
+/**
+ * Why chat can't run here, worded for whoever is reading (D60), or null when it can.
+ * Covers both the key and the production model check (D59), so a page never shows a
+ * ready composer that the chat route would then refuse. The detail, when there is one,
+ * is logged rather than shown.
+ */
+export function modelNotice(env: ServerEnv = process.env): string | null {
+  const production = isProduction(env);
+  if (!env.OPENROUTER_API_KEY) {
+    if (production) console.error("AI unavailable: OPENROUTER_API_KEY is not set.");
+    return setupNotice("AI", "add OPENROUTER_API_KEY to .env and restart the dev server.", production);
+  }
+  const problem = modelConfigProblem(env);
+  if (problem) {
+    console.error(`AI unavailable: ${problem}`);
+    return MODEL_SETUP_MESSAGE;
+  }
+  return null;
 }
 
 // Created lazily so the app still starts when the key isn't set yet.

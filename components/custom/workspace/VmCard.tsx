@@ -7,6 +7,7 @@ import { getVm, getVmStats, openVmScreen, pauseVm, startVm, stopVm } from "@/app
 import { Spinner } from "@/components/custom/design/RunStepRow";
 import type { Activity } from "@/lib/agent/events";
 import type { SandboxScreen, SandboxStats, SandboxView } from "@/lib/sandbox";
+import { setupNotice } from "@/lib/setup";
 import { cn } from "@/lib/utils";
 
 /** One line of the VM's activity log: a command, a success, a note, or a problem. */
@@ -350,7 +351,7 @@ export default function VmCard({ agentId, ready, initial, nudge, steps = [] }: P
       {/* What it is, or what is happening to it */}
       {!ready ? (
         <p className="text-caption text-run-panel-muted">
-          VMs aren&apos;t set up yet: add E2B_API_KEY to .env and restart the dev server.
+          {setupNotice("VMs", "add E2B_API_KEY to .env and restart the dev server.", process.env.NODE_ENV === "production")}
         </p>
       ) : vm.status === "stopped" || vm.status === "error" ? (
         <p className="text-caption text-run-panel-muted">
