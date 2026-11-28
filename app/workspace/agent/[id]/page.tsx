@@ -19,6 +19,12 @@ import { getCurrentUser } from "@/lib/auth";
 import { getSandbox, hasSandboxKey } from "@/lib/sandbox";
 import { listTasks, toTaskView } from "@/lib/tasks";
 
+/**
+ * For the server actions this page uses (Next.js applies a page's maxDuration to them):
+ * starting a VM and opening its screen each take up to about 20 seconds (D58).
+ */
+export const maxDuration = 60;
+
 type Props = {
   params: Promise<{ id: string }>;
   /**

@@ -120,5 +120,9 @@ delivery it would use are already there.
 
 ## Migrations
 
-**Decided for now:** `drizzle-kit push` during early development.
-**Proposed before launch:** switch to `drizzle-kit generate` + `migrate` so every schema change is a reviewed SQL file in git. (We already hit a case where `push` stops to ask whether a column was renamed.)
+**Decided (D58): generated migrations.** Every schema change is a reviewed SQL file in `drizzle/`, committed with the code that needs it.
+
+- Change `db/schema.ts`, then `npm run db:generate -- --name what_changed`: read the SQL it writes.
+- `npm run db:migrate` applies whatever hasn't run yet, recorded in `drizzle.__drizzle_migrations`. Run it against production before (or as part of) deploying code that needs it.
+- `drizzle/0000_baseline.sql` is the whole schema as it was when migrations started. A **new** database gets everything from `db:migrate`. The databases that already existed then were built with `push`: `npm run db:baseline` records the baseline as applied, after checking every table and column is already there, so `migrate` doesn't try to create them again.
+- `db:push` is no longer used: it changes a database without leaving a file behind, and stops to ask when it can't tell a rename from a drop.

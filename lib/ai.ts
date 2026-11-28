@@ -29,7 +29,8 @@ function resolveModel(value: string | undefined) {
 }
 
 /** OpenRouter speaks the OpenAI API, so the official SDK is the client (decision D26). */
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+/** Overridable for a proxy, or for tests that stand in a fake model (scripts/verify-deadline.ts). */
+const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
 
 /** True when an OpenRouter API key is configured in .env. */
 export function hasModelKey() {

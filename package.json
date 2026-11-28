@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:migrate": "drizzle-kit migrate",
+    "db:baseline": "node --no-warnings scripts/db-baseline.ts",
     "db:studio": "drizzle-kit studio",
     "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
     "compare": "node --no-warnings scripts/compare.ts",
@@ -19,7 +21,8 @@
     "verify:egress": "node --no-warnings scripts/verify-egress.ts",
     "verify:limits": "node --no-warnings scripts/verify-limits.ts",
     "verify:account-deletion": "node --no-warnings scripts/verify-account-deletion.ts",
-    "verify:inngest": "node --no-warnings scripts/verify-inngest.ts"
+    "verify:inngest": "node --no-warnings scripts/verify-inngest.ts",
+    "verify:deadline": "node --no-warnings scripts/verify-deadline.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
