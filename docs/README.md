@@ -16,6 +16,7 @@ These documents are the plan we build from. Read them before starting a new feat
 | 8 | [Roadmap](08-roadmap.md) | Phases, tasks, and how we know each phase is done |
 | 9 | [Decisions](09-decisions.md) | Log of technical decisions and why we made them |
 | 10 | [Open questions](10-open-questions.md) | Things we still need to decide |
+| 11 | [Diagrams](11-diagrams.md) | The system, data model, run flows and lifecycles, drawn in Mermaid |
 
 ## Status labels used in these docs
 
