@@ -10,7 +10,7 @@
  */
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(import.meta.dirname, "..").split(path.sep).join("/");
 
@@ -32,8 +32,9 @@ export async function resolve(specifier, context, next) {
     (specifier.startsWith("./") || specifier.startsWith("../")) &&
     context.parentURL?.startsWith("file:")
   ) {
-    const target = new URL(specifier, new URL(".", context.parentURL));
-    const asPath = decodeURIComponent(target.pathname).replace(/^\//, "");
+    // fileURLToPath, not the URL's pathname: "/app/lib/x" on Linux must keep its leading
+    // slash, and "/C:/app/lib/x" on Windows must lose it.
+    const asPath = fileURLToPath(new URL(specifier, new URL(".", context.parentURL)));
     if (!isFile(asPath)) {
       const found = firstExisting(asPath);
       if (found) return next(pathToFileURL(found).href, context);

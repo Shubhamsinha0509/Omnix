@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           # The scripts run .ts directly (type stripping): Node 22.18 or later.
           node-version: 22
@@ -52,8 +52,8 @@ jobs:
       # Lets the "refused at the cap, before E2B is called" checks reach the cap; never used.
       E2B_API_KEY: e2b_ci_fake_never_called
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
