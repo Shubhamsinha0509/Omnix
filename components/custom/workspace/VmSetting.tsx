@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { setAgentVm } from "@/app/workspace/actions";
 import type { VmState } from "@/lib/vm-state";
+import { devOnly } from "@/lib/setup";
 
 /**
  * The agent's Isolated VM as one setting, and the warning a scheduled task gets when it
@@ -65,7 +66,7 @@ export function VmSettingRow({ agentId, agentName, vm }: { agentId: string; agen
           </span>
           <span className="text-body-s text-muted-foreground">
             {!state.available
-              ? "Needs E2B_API_KEY in .env."
+              ? devOnly("Needs E2B_API_KEY in .env.", "Not available on this server.", process.env.NODE_ENV === "production")
               : state.enabled
                 ? "A private computer for this agent: run code, keep files, browse."
                 : "Off: this agent has no VM. Turn on to let it run code, keep files and browse."}

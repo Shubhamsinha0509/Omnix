@@ -53,8 +53,8 @@ async function main() {
   const logged: string[] = [];
   const realError = console.error;
   console.error = (...args: unknown[]) => void logged.push(args.map(String).join(" "));
-  const route = await import("@/app/api/inngest/route");
-  console.error = realError;
+  // Restored even if the import throws, or the crash itself would be swallowed.
+  const route = await import("@/app/api/inngest/route").finally(() => (console.error = realError));
   const refused = (await route.POST(new Request(URL_, { method: "POST", body: "{}" }) as never, undefined as never)) as Response;
   check("it refuses with 503", refused.status === 503, refused.status);
   const body = (await refused.json()) as { error?: string; problems?: unknown };

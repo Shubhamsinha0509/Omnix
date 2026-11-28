@@ -9,7 +9,7 @@ import { listPendingForConversation } from "@/lib/agent/approvals";
 import { getRunDetail } from "@/lib/agent/runs";
 import { agentFacts } from "@/lib/agent-facts";
 import { setupFor, suggestionsFor } from "@/lib/agent-guide";
-import { CHAT_MODEL, hasModelKey } from "@/lib/ai";
+import { CHAT_MODEL, modelNotice } from "@/lib/ai";
 import { modelLabel } from "@/lib/format";
 import type { ConfigTab } from "@/components/custom/workspace/AgentConfigPanel";
 import { TOOLS, listToolSettings } from "@/lib/tools";
@@ -147,7 +147,7 @@ export default async function AgentPage({ params, searchParams }: Props) {
         expiresAt: approval.expiresAt.toISOString(),
         resumable: approval.resumable,
       }))}
-      aiReady={hasModelKey()}
+      aiNotice={modelNotice()}
       config={{
         tools,
         connections,

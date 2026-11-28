@@ -16,6 +16,7 @@ These documents are the plan we build from. Read them before starting a new feat
 | 8 | [Roadmap](08-roadmap.md) | Phases, tasks, and how we know each phase is done |
 | 9 | [Decisions](09-decisions.md) | Log of technical decisions and why we made them |
 | 10 | [Open questions](10-open-questions.md) | Things we still need to decide |
+| 11 | [Diagrams](11-diagrams.md) | The system, data model, run flows and lifecycles, drawn in Mermaid |
 
 ## Status labels used in these docs
 
@@ -246,6 +247,19 @@ domain first — Resend will refuse a `from` address on a domain you don't own. 
 unset, nothing is lost: the task says so and the result goes to the Inbox instead (D44).
 Omnix emails **you**, never anybody else; an agent emailing somebody is `gmail.send`,
 which needs a connected account and an approval card.
+
+## Agent skills
+
+`.agents/skills/` holds skills that coding agents load, pinned in `skills-lock.json`. Today
+there is one: `mermaid-diagrams` (from `softaworks/agent-toolkit`), used for
+[the diagrams](11-diagrams.md). It is documentation only, with no scripts.
+
+Claude Code looks in `.claude/skills/`, which needs a link to each skill. The link is
+specific to each machine, so it isn't committed. After cloning, recreate it with:
+
+```sh
+npx -y skills add softaworks/agent-toolkit --skill mermaid-diagrams -y
+```
 
 ## How we work
 

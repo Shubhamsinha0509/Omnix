@@ -87,7 +87,8 @@ type Props = {
   initialMessages: ChatMessage[];
   /** Cards still waiting in this conversation, so a reload doesn't lose them. */
   initialApprovals: ApprovalRequest[];
-  aiReady: boolean;
+  /** Why chat can't run on this server, worded for the reader (lib/ai.ts `modelNotice`); null when it can. */
+  aiNotice: string | null;
   /** What the configuration panel beside the chat needs: tools, accounts, chat count. */
   config: AgentConfig;
   /** From Home's composer (`?prompt=`): sent as the first message of a new chat. */
@@ -131,7 +132,7 @@ export default function AgentChat({
   initialConversationId,
   initialMessages,
   initialApprovals,
-  aiReady,
+  aiNotice,
   config,
   initialPrompt = null,
   initialTab = null,
@@ -140,6 +141,7 @@ export default function AgentChat({
   starters,
   setup,
 }: Props) {
+  const aiReady = !aiNotice;
   const router = useRouter();
   /** The configuration drawer: closed to start (05/06), open on a tab (07–10). */
   const [panelOpen, setPanelOpen] = useState(initialTab !== null);
@@ -683,10 +685,10 @@ export default function AgentChat({
 
         {/* Composer */}
         <div className="flex shrink-0 flex-col items-center gap-2 px-4 pt-3 pb-5 md:px-6">
-          {!aiReady && (
+          {aiNotice && (
             <p className="flex w-full max-w-[780px] items-center gap-2 rounded-md bg-warning-subtle px-3 py-2 text-body-s text-warning-text">
               <TriangleAlert className="size-4 shrink-0" />
-              AI isn&apos;t set up yet: add OPENROUTER_API_KEY to .env and restart the dev server.
+              {aiNotice}
             </p>
           )}
           {error && (

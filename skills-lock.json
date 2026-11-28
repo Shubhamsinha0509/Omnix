@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "skills": {
+    "mermaid-diagrams": {
+      "source": "softaworks/agent-toolkit",
+      "commit": "3027f20f3181758385a1bb8c022d4041dfb4de84",
+      "sourceType": "github",
+      "skillPath": "skills/mermaid-diagrams/SKILL.md",
+      "computedHash": "c425d7bc17756e5c0538e57286a008b18a45d0967401695c003692badf0cb37a"
+    }
+  }
+}

@@ -8,7 +8,7 @@ import { agentTools, agents, db } from "@/db";
 import { getOwnedAgent } from "@/lib/agents";
 import { getCurrentUser } from "@/lib/auth";
 import { getConnection } from "@/lib/integrations/connections";
-import { destroySandbox, hasSandboxKey } from "@/lib/sandbox";
+import { destroySandbox, hasSandboxKey, vmSetupNotice } from "@/lib/sandbox";
 import { TOOLS, isNativeTool, type ToolDefinition } from "@/lib/tools";
 import { AVATAR_SEED_PATTERN } from "@/lib/avatars";
 import { MAX_AGENT_INSTRUCTIONS, MAX_AGENT_NAME } from "@/lib/agent-limits";
@@ -168,7 +168,7 @@ export async function setAgentVm(
   const agent = await getOwnedAgent(user.id, agentId);
   if (!agent) return { error: "Agent not found." };
   if (input.enabled && !hasSandboxKey()) {
-    return { error: "VMs aren't set up yet: add E2B_API_KEY to .env and restart the dev server." };
+    return { error: vmSetupNotice() };
   }
 
   const vmTools = Object.values(TOOLS).filter(

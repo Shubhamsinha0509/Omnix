@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IntegrationTile } from "@/components/custom/design/IntegrationTile";
 import { disconnectAccount, refreshServerTools } from "@/app/workspace/integrations/actions";
 import type { SafeConnection } from "@/lib/integrations/connections";
+import { devOnly } from "@/lib/setup";
 
 /** One app on this page, whether it is built in, an MCP server, or still a picture. */
 export type IntegrationView = {
@@ -133,7 +134,11 @@ export default function Connections({ integrations, encryptionReady }: Props) {
 
       {!encryptionReady && (
         <p role="alert" className="rounded-md bg-warning-subtle px-3 py-2 text-body-s text-warning-text">
-          TOKEN_ENCRYPTION_KEY isn&apos;t set, so no account can be connected. Add it to .env and restart.
+          {devOnly(
+            "TOKEN_ENCRYPTION_KEY isn't set, so no account can be connected. Add it to .env and restart.",
+            "Connecting accounts isn't available on this server right now.",
+            process.env.NODE_ENV === "production",
+          )}
         </p>
       )}
       {error && (

@@ -57,7 +57,7 @@ quota on Gemini's free tier).
 - [x] Google Cloud set up: Gmail API enabled, consent screen in Testing, test users added, redirect URI registered, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env` — steps in [connecting Gmail](README.md#connecting-gmail)
 - [ ] Walk the live loop against a real mailbox: connect → search → read → draft → send with an approval
 - [ ] Start reading Google's verification requirements (restricted scopes + CASA) — see [security](07-security.md#google-verification)
-- [ ] Switch back to a paid model before any of this touches a real inbox (D34) — **not done**: `CHAT_MODEL` in `lib/ai.ts` is still the free `:free` model (D38, no OpenRouter credit), so email an agent reads goes to a provider that may log prompts
+- [x] Switch back to a paid model before any of this touches a real inbox (D34): the local `.env` names a non-free model, and production refuses an empty or `:free` `OPENROUTER_MODEL` (D59). The free fallback in `lib/ai.ts` is now local-only
 
 ### What is verified, and what isn't
 
@@ -199,6 +199,7 @@ back, but the fallback has only been exercised as far as the auth wall.
 - [ ] Google verification complete (for public Gmail)
 - [x] Switch to `drizzle-kit generate` + `migrate` (D58: `drizzle/0000_baseline.sql`; this database baselined on 2026-11-26)
 - [x] Request time limits: `maxDuration` and a chat-turn deadline (D58)
+- [x] CI on every push and pull request: lint, types, build, migrations on a fresh Postgres and the `verify:*` checks that need no secrets (D59, `.github/workflows/ci.yml`)
 - [ ] Production deployment, monitoring, error tracking
 
 ## Later

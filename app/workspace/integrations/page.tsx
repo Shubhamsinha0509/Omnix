@@ -10,6 +10,7 @@ import { listConnections } from "@/lib/integrations/connections";
 import { hasGoogleOAuth } from "@/lib/integrations/google";
 import { MCP_SERVERS, cachedMcpTools, isMcpServerConfigured, mcpProvider } from "@/lib/mcp";
 import { MOCK_INTEGRATIONS } from "@/lib/mock-data";
+import { devOnly } from "@/lib/setup";
 
 type Props = {
   /** The connect flow redirects back here with its result in the query string. */
@@ -70,7 +71,9 @@ export default async function IntegrationsPage({ searchParams }: Props) {
       hasGoogleOAuth() && encryptionReady
         ? "/api/connections/gmail/start?returnTo=/workspace/integrations"
         : null,
-    disabledReason: !hasGoogleOAuth() ? "Google OAuth isn't configured in .env." : null,
+    disabledReason: !hasGoogleOAuth()
+      ? devOnly("Google OAuth isn't configured in .env.", "Not available on this server yet.")
+      : null,
   };
 
   // Each connected MCP server reports its own tools, so the count comes from the cache
@@ -161,9 +164,15 @@ function describeError(code: string) {
     case "state_mismatch":
       return "That connect link had expired or didn't match this browser. Please try again.";
     case "google_not_configured":
-      return "Google OAuth isn't configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.";
+      return devOnly(
+        "Google OAuth isn't configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.",
+        "Gmail can't be connected on this server yet.",
+      );
     case "no_encryption_key":
-      return "TOKEN_ENCRYPTION_KEY isn't set, so the token couldn't be stored safely. Add it to .env.";
+      return devOnly(
+        "TOKEN_ENCRYPTION_KEY isn't set, so the token couldn't be stored safely. Add it to .env.",
+        "Connecting accounts isn't available on this server right now.",
+      );
     case "exchange_failed":
       return "The app wouldn't complete the connection. Check the redirect URI is registered, then try again.";
     case "no_code":
@@ -171,7 +180,10 @@ function describeError(code: string) {
     case "unknown_server":
       return "That app isn't one Omnix can connect.";
     case "server_not_configured":
-      return "That app needs OAuth credentials in .env before it can be connected.";
+      return devOnly(
+        "That app needs OAuth credentials in .env before it can be connected.",
+        "That app can't be connected on this server yet.",
+      );
     case "start_failed":
       return "The app's MCP server couldn't be reached to begin the connection. Try again shortly.";
     default:

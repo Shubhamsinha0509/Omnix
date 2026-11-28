@@ -1,0 +1,74 @@
+# Every push and pull request (D59). No secrets: nothing here calls a real model, E2B,
+# Google or an MCP server. The `--live` variants of verify:vm / verify:limits / verify:mcp
+# stay manual.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, types, build, in-process checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          # The scripts run .ts directly (type stripping): Node 22.18 or later.
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm run verify:model
+      - run: npm run verify:inngest
+
+  database:
+    name: Migrations and database checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: omnix
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/omnix
+      # Lets the "refused at the cap, before E2B is called" checks reach the cap; never used.
+      E2B_API_KEY: e2b_ci_fake_never_called
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # A fresh key each run: encrypted rows only live as long as this database.
+      - name: Generate a throwaway TOKEN_ENCRYPTION_KEY
+        run: echo "TOKEN_ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")" >> "$GITHUB_ENV"
+      # Builds the whole schema from drizzle/ (D58): a migration that doesn't apply fails here.
+      - run: npm run db:migrate
+      # Several scripts work on the first user's throwaway agent.
+      - name: Seed one user
+        run: psql "$DATABASE_URL" -c "INSERT INTO users (email, name) VALUES ('ci@example.test', 'CI')"
+      - run: npm run verify:egress
+      - run: npm run verify:limits
+      - run: npm run verify:account-deletion
+      - run: npm run verify:deadline
+      - run: npm run verify:vm
+      - run: npm run verify:mcp
