@@ -248,6 +248,19 @@ unset, nothing is lost: the task says so and the result goes to the Inbox instea
 Omnix emails **you**, never anybody else; an agent emailing somebody is `gmail.send`,
 which needs a connected account and an approval card.
 
+## Agent skills
+
+`.agents/skills/` holds skills that coding agents load, pinned in `skills-lock.json`. Today
+there is one: `mermaid-diagrams` (from `softaworks/agent-toolkit`), used for
+[the diagrams](11-diagrams.md). It is documentation only, with no scripts.
+
+Claude Code looks in `.claude/skills/`, which needs a link to each skill. The link is
+specific to each machine, so it isn't committed. After cloning, recreate it with:
+
+```sh
+npx -y skills add softaworks/agent-toolkit --skill mermaid-diagrams -y
+```
+
 ## How we work
 
 1. Pick the next unchecked item in the [roadmap](08-roadmap.md).

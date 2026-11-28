@@ -33,3 +33,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 /design/compare/
+
+# agent skills: the per-machine link Claude Code uses (see docs/README.md#agent-skills)
+/.claude/skills/mermaid-diagrams
