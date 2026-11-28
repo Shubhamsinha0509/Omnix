@@ -11,6 +11,13 @@ const jsonError = (error: string, status: number, extra?: Record<string, unknown
   Response.json({ error, ...extra }, { status });
 
 /**
+ * As for chat (D58): approving runs the stored action (a VM program can take minutes) and
+ * then the rest of the agent's turn, which stops cleanly before this limit.
+ */
+export const maxDuration = 300;
+const DEADLINE_MARGIN_MS = 15_000;
+
+/**
  * POST /api/approvals/:id  { decision: "approve" | "reject" }
  *
  * Acts on one approval card. What that means depends on what was waiting for it:
@@ -28,6 +35,7 @@ const jsonError = (error: string, status: number, extra?: Record<string, unknown
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: approvalId } = await params;
+  const deadlineAt = Date.now() + maxDuration * 1000 - DEADLINE_MARGIN_MS;
 
   const user = await getCurrentUser();
   if (!user) return jsonError("Please sign in again.", 401);
@@ -107,6 +115,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           decision,
           signal: abort.signal,
           emit,
+          deadlineAt,
         });
 
         if (!result.ok) {

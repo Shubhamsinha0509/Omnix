@@ -13,6 +13,16 @@ import { hasModelKey } from "@/lib/ai";
 import { getCurrentUser } from "@/lib/auth";
 import { rateLimit } from "@/lib/rate-limit";
 
+/**
+ * How long the host may let this request run, in seconds (Next.js route segment config;
+ * Vercel reads it). A turn that starts a VM and runs code can take minutes. The turn is
+ * given a deadline a little inside it, so it stops cleanly and saves rather than being cut
+ * off (D58). The plan's own ceiling still applies: check it at deploy.
+ */
+export const maxDuration = 300;
+/** Kept back for the stream to finish and the reply to be saved after the turn stops. */
+const DEADLINE_MARGIN_MS = 15_000;
+
 const MAX_MESSAGE = 8000;
 const HISTORY_LIMIT = 40; // most recent messages sent to the model as context
 
@@ -27,6 +37,7 @@ const jsonError = (error: string, status: number) => Response.json({ error }, { 
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: agentId } = await params;
+  const deadlineAt = Date.now() + maxDuration * 1000 - DEADLINE_MARGIN_MS;
 
   const user = await getCurrentUser();
   if (!user) return jsonError("Please sign in again.", 401);
@@ -123,6 +134,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           timezone,
           signal: abort.signal,
           emit,
+          deadlineAt,
         });
         reply = outcome.reply;
       } catch (error) {

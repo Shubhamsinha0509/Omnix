@@ -52,6 +52,12 @@ export const LIMITS = {
   toolTimeoutMs: 30_000,
   /** How much of a tool's result goes back to the model. */
   maxToolOutputChars: 20_000,
+  /**
+   * For a chat turn with a deadline (D58): kept back for a last model turn and saving, and
+   * the least time worth starting a tool call with.
+   */
+  timeReserveMs: 40_000,
+  minToolTimeMs: 15_000,
 };
 
 /**
@@ -130,6 +136,8 @@ export type RunAgentOptions = {
    * `waiting_approval` and `resumeAgent` picks it up later (chat, D35).
    */
   awaitApproval?: ApprovalGate;
+  /** When the host will stop this request (epoch ms); chat turns only (D58). */
+  deadlineAt?: number;
 };
 
 export type RunOutcome = {
@@ -206,6 +214,7 @@ export async function runAgent(options: RunAgentOptions): Promise<RunOutcome> {
     log: stepLogger(started.runId, 0, durability.memoised),
     spent: { iteration: 0, toolCalls: 0, inputTokens: 0, outputTokens: 0 },
     maxIterations,
+    deadlineAt: options.deadlineAt,
   });
 }
 
@@ -216,6 +225,8 @@ export type ResumeAgentOptions = {
   decision: "approved" | "rejected";
   signal: AbortSignal;
   emit: (event: RunEvent) => void;
+  /** When the host will stop this request (epoch ms), as for `runAgent` (D58). */
+  deadlineAt?: number;
 };
 
 export type ResumeResult =
@@ -294,6 +305,7 @@ export async function resumeAgent(options: ResumeAgentOptions): Promise<ResumeRe
       },
       // Only chat turns resume here; background runs wait in place instead.
       maxIterations: LIMITS.maxIterations,
+      deadlineAt: options.deadlineAt,
     }),
   };
 }
@@ -315,6 +327,12 @@ type DriveOptions = {
   spent: Spent;
   /** Model turns this run may take: `LIMITS.maxIterations`, or more for a background run. */
   maxIterations: number;
+  /**
+   * When the request running this turn will be killed by the host (epoch ms), for chat
+   * turns. The turn stops cleanly before it instead of being cut off mid-step (D58).
+   * Background runs have none: each step there is its own request.
+   */
+  deadlineAt?: number;
   /** Chat runs everything now; a background run wraps each piece in a durable step (D41). */
   durability: Durability;
   /** Set for a background run, which waits for an approval instead of stopping (D41). */
@@ -400,8 +418,27 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
     }
   }
 
+  /**
+   * Time left before the host stops this request, keeping back `TIME_RESERVE_MS` for a
+   * last model turn and saving. Infinity when there is no deadline (background runs).
+   */
+  const timeLeft = () => (options.deadlineAt ? options.deadlineAt - Date.now() - LIMITS.timeReserveMs : Infinity);
+  const outOfTime =
+    'This took longer than one message can, so I stopped here. Send "continue" and I\'ll carry on; anything saved in my VM is still there.';
+  let stopForTime = false;
+  /** The turn ended at its deadline (either check), for the run's final status. */
+  let timedOut = false;
+
   try {
     for (let iteration = options.spent.iteration + 1; iteration <= options.maxIterations; iteration++) {
+      // Not enough time left for another model turn: stop cleanly rather than be cut off.
+      if (timeLeft() <= 0) {
+        await durability.step(`limit-time-${iteration}`, () => log("error", null, { reason: "time_limit" }));
+        note(outOfTime);
+        timedOut = true;
+        break;
+      }
+
       /**
        * One model turn, as one durable step: the call to the provider and the log of
        * what it said. They go together because a retry must not write the step twice,
@@ -456,6 +493,12 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
           messages.push(toolMessage(call.id, { error: "Tool call limit reached for this run." }));
           continue;
         }
+        // Too little time to run it safely: answer the call without running it, and stop.
+        if (timeLeft() < LIMITS.minToolTimeMs) {
+          stopForTime = true;
+          messages.push(toolMessage(call.id, { error: "Out of time for this message; this wasn't run." }));
+          continue;
+        }
         toolCalls++;
 
         // One tool call, one durable step. A tool that fails is retried on its own, and
@@ -472,6 +515,7 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
             emit,
             log,
             egress,
+            timeLeftMs: timeLeft(),
           }),
         );
 
@@ -591,6 +635,12 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
 
       if (pausedForApproval) break;
 
+      if (stopForTime) {
+        await durability.step(`limit-time-tools-${iteration}`, () => log("error", null, { reason: "time_limit" }));
+        note(outOfTime);
+        timedOut = true;
+        break;
+      }
       if (stopAfterTools) {
         await durability.step("limit-tool-calls", () =>
           log("error", null, { reason: "max_tool_calls", limit: LIMITS.maxToolCalls }),
@@ -612,8 +662,16 @@ async function drive(options: DriveOptions): Promise<RunOutcome> {
     }
 
     // A stop can land between turns without anything throwing; it is still a cancellation.
-    const status = signal.aborted ? "cancelled" : reply ? "succeeded" : "failed";
-    await finishRun({ runId, status, inputTokens, outputTokens });
+    // So is reaching the time limit with nothing said yet: the user is asked to continue,
+    // nothing went wrong (D58).
+    const status = signal.aborted || (timedOut && !reply) ? "cancelled" : reply ? "succeeded" : "failed";
+    await finishRun({
+      runId,
+      status,
+      error: timedOut && !reply ? "Stopped at the time limit for one message; the user can say continue." : null,
+      inputTokens,
+      outputTokens,
+    });
     return { runId, reply, status };
   } catch (error) {
     if (signal.aborted) {
@@ -793,6 +851,8 @@ type ExecuteCallArgs = {
   log: StepLogger;
   /** What the exfiltration guard needs (lib/agent/egress.ts, D54). */
   egress: { privateAccess: boolean; userUrls: Set<string> };
+  /** Time this request has left (D58); the tool gets no more than that. */
+  timeLeftMs: number;
 };
 
 /** Validates, runs and logs one tool call, and builds the message the model gets back. */
@@ -883,6 +943,7 @@ async function executeCall(args: ExecuteCallArgs): Promise<CallOutcome> {
       signal: args.signal,
       auth: null,
     },
+    maxMs: args.timeLeftMs,
   });
 
   if ("error" in result) {
@@ -1073,6 +1134,8 @@ async function callTool(args: {
   connectionId: string | null;
   args: Record<string, unknown>;
   base: ToolContext;
+  /** No longer than this, whatever the tool's own limit (a chat turn's time left, D58). */
+  maxMs?: number;
 }): Promise<ToolResult> {
   let auth: ToolContext["auth"] = null;
 
@@ -1092,18 +1155,23 @@ async function callTool(args: {
     }
   }
 
-  return withTimeout(args.tool, args.args, { ...args.base, auth });
+  return withTimeout(args.tool, args.args, { ...args.base, auth }, args.maxMs);
 }
 
 /** Runs a tool, but never waits longer than its limit (its own, or the runner's default). */
-async function withTimeout(tool: ToolDefinition, toolArgs: Record<string, unknown>, base: ToolContext) {
-  const limitMs = tool.timeoutMs ?? LIMITS.toolTimeoutMs;
+async function withTimeout(
+  tool: ToolDefinition,
+  toolArgs: Record<string, unknown>,
+  base: ToolContext,
+  maxMs = Infinity,
+) {
+  const limitMs = Math.max(1_000, Math.min(tool.timeoutMs ?? LIMITS.toolTimeoutMs, maxMs));
   const timeout = AbortSignal.timeout(limitMs);
   const ctx: ToolContext = { ...base, signal: AbortSignal.any([base.signal, timeout]) };
 
   const timedOut = new Promise<{ error: string }>((resolve) => {
     timeout.addEventListener("abort", () =>
-      resolve({ error: `${tool.key} took longer than ${limitMs / 1000}s and was stopped.` }),
+      resolve({ error: `${tool.key} took longer than ${Math.round(limitMs / 1000)}s and was stopped.` }),
     );
   });
 

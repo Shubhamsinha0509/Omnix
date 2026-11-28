@@ -13,6 +13,12 @@ import { functions } from "@/lib/inngest/functions";
  * lets the signing key be rotated without downtime: set the new one as INNGEST_SIGNING_KEY
  * and the old one as INNGEST_SIGNING_KEY_FALLBACK until Inngest has switched over.
  */
+/**
+ * Each Inngest step is its own request here, and the longest is one VM tool call
+ * (starting the VM plus 90 s of code, about 2.5 minutes). Room for that (D58).
+ */
+export const maxDuration = 300;
+
 const handlers = serve({
   client: inngest,
   functions,

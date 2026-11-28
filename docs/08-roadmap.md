@@ -197,7 +197,8 @@ back, but the fallback has only been exercised as far as the auth wall.
 - [ ] Long-term memory
 - [ ] Security checklist complete ([security](07-security.md#checklist-before-any-public-deployment))
 - [ ] Google verification complete (for public Gmail)
-- [ ] Switch to `drizzle-kit generate` + `migrate`
+- [x] Switch to `drizzle-kit generate` + `migrate` (D58: `drizzle/0000_baseline.sql`; this database baselined on 2026-11-26)
+- [x] Request time limits: `maxDuration` and a chat-turn deadline (D58)
 - [ ] Production deployment, monitoring, error tracking
 
 ## Later
